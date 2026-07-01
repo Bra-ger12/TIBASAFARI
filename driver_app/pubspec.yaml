@@ -1,0 +1,57 @@
+name: driver_app
+description: "Tiba Safari Driver App — NEMT driver companion."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  http: ^1.2.2
+
+  # Secure token storage
+  flutter_secure_storage: ^9.2.2
+
+  # Location & Maps
+  geolocator: ^13.0.1
+  google_maps_flutter: ^2.10.0
+  geocoding: ^4.0.0
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # WebSocket
+  web_socket_channel: ^3.0.1
+
+  # Formatting
+  intl: ^0.20.1
+
+  # Fonts
+  google_fonts: ^6.2.1
+
+  # URL launcher (for native navigation apps)
+  url_launcher: ^6.3.1
+
+  # Proof of service capture (trip completion)
+  image_picker: ^1.1.2
+  signature: ^5.5.0
+
+  # Offline retry queue persistence
+  shared_preferences: ^2.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/images/tiba-safari-logo.png

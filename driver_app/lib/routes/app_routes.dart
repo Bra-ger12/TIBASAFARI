@@ -1,0 +1,28 @@
+class AppRoutes {
+  static const String splash = '/';
+  static const String login = '/login';
+  static const String signup = '/signup';
+  static const String home = '/home';
+  static const String driverHome = home;
+  static const String assignedTrips = '/assigned-trips';
+  static const String activeTrip = '/active-trip';
+  static const String tripHistory = '/trip-history';
+  static const String tripDetail = '/trip-detail';
+  static const String earnings = '/earnings';
+  static const String notifications = '/notifications';
+  static const String profile = '/profile';
+
+  static const Map<String, String> routeNames = {
+    splash: 'Splash',
+    login: 'Login',
+    signup: 'Driver Signup',
+    home: 'Driver Home',
+    assignedTrips: 'Assigned Trips',
+    activeTrip: 'Active Trip',
+    tripHistory: 'Trip History',
+    tripDetail: 'Trip Details',
+    earnings: 'Earnings',
+    notifications: 'Notifications',
+    profile: 'Driver Profile',
+  };
+}

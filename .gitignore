@@ -1,0 +1,20 @@
+# Runtime artifacts / local tooling — not part of the codebase
+*.log
+dump.rdb
+.uploads/
+.agents/
+.claude/settings.local.json
+
+# Flutter nested native build output (top-level /build/ is already
+# handled by each app's own .gitignore, but android/ios subfolders aren't)
+**/android/build/
+**/android/.gradle/
+**/ios/Pods/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
