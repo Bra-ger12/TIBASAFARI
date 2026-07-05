@@ -7,7 +7,7 @@ services:
     buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput"
     startCommand: "bash -c 'python manage.py migrate && daphne -b 0.0.0.0 -p $PORT config.asgi:application'"
     autoDeploy: true
-    healthCheckPath: /health/
+    healthCheckPath: /api/v1/health/
     envVars:
       - key: DJANGO_ENV
         value: production
