@@ -63,7 +63,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     setState(() => _actionLoading = true);
     try {
       await ApiService.post(
-          '/trips/$tripId/assign-driver/', {'driver': driverId});
+          '/trips/$tripId/assign-driver/', {'driver_id': driverId});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Driver assigned.')));
@@ -221,29 +221,21 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (b.patient != null)
+        if (b.patientName.isNotEmpty)
           SectionCard(
             title: 'Patient',
             child: InkWell(
-              onTap: () => widget.nav.openDetail('patient', b.patient!.id),
+              onTap: () => widget.nav.openDetail('patient', b.patientId),
               child: Row(
                 children: [
                   AvatarCircle(
-                      name: b.patient!.name,
+                      name: b.patientName,
                       color: AppTheme.primary),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(b.patient!.name,
-                            style: const TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.w600)),
-                        Text(b.patient!.phone,
-                            style: const TextStyle(
-                                fontSize: 12, color: AppTheme.textMuted)),
-                      ],
-                    ),
+                    child: Text(b.patientName,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),

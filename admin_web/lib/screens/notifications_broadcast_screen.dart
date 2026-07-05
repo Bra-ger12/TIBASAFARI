@@ -29,7 +29,7 @@ class _NotificationsBroadcastScreenState
   }
 
   Future<List<NotificationRecord>> _load() async {
-    final items = await ApiService.list('/notifications/');
+    final items = await ApiService.list('/notifications/broadcasts/');
     return items.map(NotificationRecord.fromJson).toList();
   }
 
@@ -41,7 +41,7 @@ class _NotificationsBroadcastScreenState
     }
     setState(() => _sending = true);
     try {
-      final res = await ApiService.post('/notifications/', {
+      final res = await ApiService.post('/notifications/broadcasts/', {
         'title': _title.text,
         'message': _message.text,
         'audience': _audience,

@@ -10,14 +10,28 @@ class TripSerializer(serializers.ModelSerializer):
     patient_email = serializers.EmailField(source="patient.email", read_only=True)
     driver_name = serializers.CharField(source="driver.full_name", read_only=True)
     driver_email = serializers.EmailField(source="driver.email", read_only=True)
+    driver_phone = serializers.CharField(source="driver.phone", read_only=True)
+    driver_vehicle_make = serializers.CharField(
+        source="driver.driver_profile.vehicle.make", read_only=True
+    )
+    driver_vehicle_model = serializers.CharField(
+        source="driver.driver_profile.vehicle.model", read_only=True
+    )
+    driver_vehicle_registration = serializers.CharField(
+        source="driver.driver_profile.vehicle.registration_number", read_only=True
+    )
     is_rated = serializers.SerializerMethodField()
     rating_score = serializers.SerializerMethodField()
+    destination_facility_name = serializers.SerializerMethodField()
 
     def get_is_rated(self, obj):
         return hasattr(obj, "rating")
 
     def get_rating_score(self, obj):
         return obj.rating.score if hasattr(obj, "rating") else None
+
+    def get_destination_facility_name(self, obj):
+        return obj.destination_facility.name if obj.destination_facility_id else None
 
     class Meta:
         model = Trip
@@ -29,9 +43,15 @@ class TripSerializer(serializers.ModelSerializer):
             "driver",
             "driver_name",
             "driver_email",
+            "driver_phone",
+            "driver_vehicle_make",
+            "driver_vehicle_model",
+            "driver_vehicle_registration",
             "recurring_schedule",
             "pickup_address",
             "destination_address",
+            "destination_facility",
+            "destination_facility_name",
             "pickup_latitude",
             "pickup_longitude",
             "destination_latitude",
@@ -41,6 +61,8 @@ class TripSerializer(serializers.ModelSerializer):
             "mobility_aid",
             "service_level",
             "oxygen_required",
+            "medical_escort_required",
+            "iv_drip_required",
             "bariatric",
             "num_attendants",
             "special_requirements",
@@ -66,6 +88,10 @@ class TripSerializer(serializers.ModelSerializer):
             "patient_email",
             "driver_name",
             "driver_email",
+            "driver_phone",
+            "driver_vehicle_make",
+            "driver_vehicle_model",
+            "driver_vehicle_registration",
             "signature",
             "proof_photo",
             "accepted_at",
@@ -77,6 +103,7 @@ class TripSerializer(serializers.ModelSerializer):
             "updated_at",
             "is_rated",
             "rating_score",
+            "destination_facility_name",
         )
 
 
@@ -87,6 +114,7 @@ class TripCreateSerializer(serializers.ModelSerializer):
             "id",
             "pickup_address",
             "destination_address",
+            "destination_facility",
             "pickup_latitude",
             "pickup_longitude",
             "destination_latitude",
@@ -95,15 +123,49 @@ class TripCreateSerializer(serializers.ModelSerializer):
             "mobility_aid",
             "service_level",
             "oxygen_required",
+            "medical_escort_required",
+            "iv_drip_required",
             "bariatric",
             "num_attendants",
             "special_requirements",
             "notes",
             "estimated_fare",
+            "estimated_fare_breakdown",
             "recurring_schedule",
             "status",
         )
         read_only_fields = ("id", "status")
+
+
+class FareEstimateRequestSerializer(serializers.Serializer):
+    pickup_latitude = serializers.DecimalField(max_digits=9, decimal_places=6)
+    pickup_longitude = serializers.DecimalField(max_digits=9, decimal_places=6)
+    destination_latitude = serializers.DecimalField(max_digits=9, decimal_places=6)
+    destination_longitude = serializers.DecimalField(max_digits=9, decimal_places=6)
+    service_type = serializers.ChoiceField(
+        choices=["basic", "wheelchair", "medical_equipment"],
+        default="basic",
+        required=False,
+    )
+    waiting_minutes = serializers.IntegerField(min_value=0, default=0, required=False)
+    scheduled_at = serializers.DateTimeField(required=False)
+
+
+class FareBreakdownSerializer(serializers.Serializer):
+    distance_km = serializers.FloatField()
+    base_fare = serializers.DecimalField(max_digits=10, decimal_places=2)
+    distance_charge = serializers.DecimalField(max_digits=10, decimal_places=2)
+    waiting_minutes = serializers.IntegerField()
+    waiting_charge = serializers.DecimalField(max_digits=10, decimal_places=2)
+    service_type = serializers.CharField()
+    service_multiplier = serializers.DecimalField(max_digits=4, decimal_places=2)
+    subtotal_after_multiplier = serializers.DecimalField(max_digits=10, decimal_places=2)
+    is_peak_hour = serializers.BooleanField()
+    peak_surcharge_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    is_urban_zone = serializers.BooleanField()
+    zone_surcharge_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    minimum_fare = serializers.DecimalField(max_digits=10, decimal_places=2)
+    total_fare = serializers.DecimalField(max_digits=10, decimal_places=2)
 
 
 class AssignDriverSerializer(serializers.Serializer):

@@ -144,3 +144,62 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment({self.invoice.invoice_number}, {self.amount}, {self.status})"
+
+
+class PricingConfig(models.Model):
+    """DB-configurable pricing parameters for the hybrid fare estimator
+    (apps.billing.services.FareEstimator) — lets staff tune pricing without
+    a deploy. See get_active()."""
+
+    class ServiceType(models.TextChoices):
+        BASIC = "basic", "Basic"
+        WHEELCHAIR = "wheelchair", "Wheelchair"
+        MEDICAL_EQUIPMENT = "medical_equipment", "Medical Equipment"
+
+    name = models.CharField(max_length=100, default="default")
+    is_active = models.BooleanField(default=True)
+
+    base_fare = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("2.50"))
+    per_km_rate = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("1.20"))
+    per_minute_wait_rate = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.25"))
+    minimum_fare = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("8.00"))
+
+    # Service-type multipliers, applied to (base + distance + waiting).
+    basic_multiplier = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal("1.00"))
+    wheelchair_multiplier = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal("1.25"))
+    medical_equipment_multiplier = models.DecimalField(
+        max_digits=4, decimal_places=2, default=Decimal("1.50")
+    )
+
+    # Surcharges — a percentage of the post-multiplier subtotal.
+    peak_hour_surcharge_pct = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal("0.20"))
+    urban_zone_surcharge_pct = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal("0.10"))
+
+    # Urban zone = a Haversine-radius circle around this center point.
+    # Defaults to Dar es Salaam city center.
+    urban_zone_center_lat = models.DecimalField(max_digits=9, decimal_places=6, default=Decimal("-6.792400"))
+    urban_zone_center_lng = models.DecimalField(max_digits=9, decimal_places=6, default=Decimal("39.208300"))
+    urban_zone_radius_km = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("5.00"))
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-is_active", "-updated_at")
+
+    def __str__(self) -> str:
+        return f"PricingConfig({self.name}, active={self.is_active})"
+
+    def multiplier_for(self, service_type: str) -> Decimal:
+        return {
+            self.ServiceType.BASIC: self.basic_multiplier,
+            self.ServiceType.WHEELCHAIR: self.wheelchair_multiplier,
+            self.ServiceType.MEDICAL_EQUIPMENT: self.medical_equipment_multiplier,
+        }.get(service_type, self.basic_multiplier)
+
+    @classmethod
+    def get_active(cls) -> "PricingConfig":
+        config = cls.objects.filter(is_active=True).order_by("-updated_at").first()
+        if config is None:
+            config = cls.objects.create(name="default")
+        return config

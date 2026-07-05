@@ -1,1 +1,4 @@
-const String apiBaseUrl = 'http://localhost:8000/api/v1';
+const String apiBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'https://tibasafari-backend.onrender.com/api/v1',
+);

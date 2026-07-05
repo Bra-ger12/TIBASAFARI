@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:patient_app/core/services/notifications_ws_service.dart';
 import 'package:patient_app/core/services/trip_api_service.dart';
 import 'package:patient_app/models/auth_session.dart';
 import 'package:patient_app/widgets/bottom_nav_bar.dart';
@@ -46,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen>
   late final List<Animation<double>> _fadeAnims;
   late final List<Animation<Offset>> _slideAnims;
   static const int _animCount = 8;
+  StreamSubscription<PatientNotification>? _notifSub;
 
   @override
   void initState() {
@@ -80,6 +84,52 @@ class _HomeScreenState extends State<HomeScreen>
     });
     _animController.forward();
     _refreshDashboard();
+    _connectNotifications();
+  }
+
+  /// Listens for the backend's real-time "Driver Assigned" push (sent by
+  /// TripService.assign_driver over ws/notifications/, with driver name/
+  /// phone/vehicle in metadata) so the patient sees who is coming without
+  /// waiting for a manual refresh.
+  Future<void> _connectNotifications() async {
+    final token = await TripApiService.instance.getToken();
+    if (token == null || !mounted) return;
+    NotificationsWsService.instance.connect(token: token);
+    _notifSub =
+        NotificationsWsService.instance.notificationStream.listen((n) async {
+      final tripId = n.metadata['trip_id'] as String?;
+      if (tripId != null) await _refreshDashboard();
+      if (!mounted) return;
+
+      final driverName = n.metadata['driver_name'] as String?;
+      final driverPhone = n.metadata['driver_phone'] as String?;
+      final vehicle = n.metadata['vehicle'] as String?;
+      final isDriverAssigned = driverName != null;
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          isDriverAssigned
+              ? '$driverName${driverPhone != null ? ' ($driverPhone)' : ''}'
+                  '${vehicle != null ? ' is coming in a $vehicle' : ' has been assigned to your trip'}.'
+              : (n.title.isNotEmpty ? '${n.title}: ${n.message}' : n.message),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        backgroundColor: cTeal,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+        action: tripId != null
+            ? SnackBarAction(
+                label: 'Track',
+                textColor: Colors.white,
+                onPressed: () => Navigator.pushNamed(
+                  context,
+                  '/track-ride',
+                  arguments: {'rideId': tripId},
+                ),
+              )
+            : null,
+      ));
+    });
   }
 
   Future<void> _refreshDashboard() async {
@@ -101,6 +151,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    _notifSub?.cancel();
     _animController.dispose();
     super.dispose();
   }
@@ -159,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen>
               session: session,
               notifCount: session.unreadNotifications,
               onMenu: () => Navigator.pushNamed(context, '/profile'),
-              // ✅ NAVIGATES TO NOTIFICATION PAGE
+              //  NAVIGATES TO NOTIFICATION PAGE
               onNotif: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
             ),
             Expanded(
@@ -177,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Hello, ${session.displayName}! 👋",
+                              "Hello, ${session.displayName}! ",
                               style: AppFonts.sora(
                                 fontSize: 26,
                                 fontWeight: FontWeight.w800,
@@ -218,7 +269,7 @@ class _HomeScreenState extends State<HomeScreen>
                           children: [
                             const _SectionHeader(title: "Quick Actions"),
                             const SizedBox(height: 14),
-                            // ✅ PASSING NAVIGATION CALLBACKS HERE
+                            //  PASSING NAVIGATION CALLBACKS HERE
                             _QuickActionsGrid(
                               onSchedule: () => Navigator.pushNamed(context, '/book-ride'),
                               onTrack: _onTrackTapped,

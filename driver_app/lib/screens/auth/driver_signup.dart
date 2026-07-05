@@ -17,7 +17,6 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _licenseController = TextEditingController();
-  final _vehicleController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
@@ -32,7 +31,6 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
     _phoneController.dispose();
     _emailController.dispose();
     _licenseController.dispose();
-    _vehicleController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -59,7 +57,6 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
         phoneNumber: '+255 ${_phoneController.text.trim()}',
         email: _emailController.text,
         licenseNumber: _licenseController.text,
-        vehicleRegistration: _vehicleController.text,
         password: _passwordController.text,
         confirmPassword: _confirmPasswordController.text,
       );
@@ -111,6 +108,18 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
     return error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
   }
 
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) return 'Please create a password';
+    if (value.length < 8) return 'Password must be at least 8 characters';
+    if (!RegExp(r'[A-Z]').hasMatch(value)) {
+      return 'Password must include at least 1 uppercase letter';
+    }
+    if (!RegExp(r'[0-9]').hasMatch(value)) {
+      return 'Password must include at least 1 number';
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -133,7 +142,7 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
                       _buildHeader(),
                       const SizedBox(height: 28),
                       _buildTextField(
-                        label: 'Full name',
+                        label: 'Full name *',
                         hint: 'Enter your full name',
                         controller: _fullNameController,
                         icon: Icons.badge_outlined,
@@ -148,7 +157,7 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
                       ),
                       const SizedBox(height: 16),
                       _buildTextField(
-                        label: 'Phone number',
+                        label: 'Phone number *',
                         hint: '712 345 678',
                         controller: _phoneController,
                         icon: Icons.phone_outlined,
@@ -168,7 +177,7 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
                       ),
                       const SizedBox(height: 16),
                       _buildTextField(
-                        label: 'Email address',
+                        label: 'Email address *',
                         hint: 'driver@example.com',
                         controller: _emailController,
                         icon: Icons.email_outlined,
@@ -185,7 +194,7 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
                       ),
                       const SizedBox(height: 16),
                       _buildTextField(
-                        label: 'Driving license number',
+                        label: 'Driving license number *',
                         hint: 'Enter license number',
                         controller: _licenseController,
                         icon: Icons.credit_card_outlined,
@@ -198,41 +207,24 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      _buildTextField(
-                        label: 'Vehicle registration',
-                        hint: 'T 123 ABC',
-                        controller: _vehicleController,
-                        icon: Icons.local_taxi_outlined,
-                        textCapitalization: TextCapitalization.characters,
-                        validator: (value) {
-                          if ((value?.trim() ?? '').length < 4) {
-                            return 'Enter vehicle registration';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
                       _buildPasswordField(
-                        label: 'Password',
+                        label: 'Password *',
                         hint: 'Create a password',
                         controller: _passwordController,
                         isVisible: _isPasswordVisible,
                         onToggle: () => setState(
                           () => _isPasswordVisible = !_isPasswordVisible,
                         ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please create a password';
-                          }
-                          if (value.length < 6) {
-                            return 'Password must be at least 6 characters';
-                          }
-                          return null;
-                        },
+                        validator: _validatePassword,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Must be at least 8 characters, with 1 uppercase letter and 1 number.',
+                        style: TextStyle(fontSize: 11.5, color: cMuted),
                       ),
                       const SizedBox(height: 16),
                       _buildPasswordField(
-                        label: 'Confirm password',
+                        label: 'Confirm password *',
                         hint: 'Re-enter password',
                         controller: _confirmPasswordController,
                         isVisible: _isConfirmPasswordVisible,

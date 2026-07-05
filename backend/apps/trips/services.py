@@ -116,11 +116,28 @@ class TripService:
         trip.status = Trip.Status.ASSIGNED
         trip.save(update_fields=["driver", "status", "updated_at"])
         _push_trip_status(trip.id, trip.status)
+
+        profile = getattr(driver, "driver_profile", None)
+        vehicle = getattr(profile, "vehicle", None) if profile else None
+        vehicle_desc = (
+            f"{vehicle.make} {vehicle.model} ({vehicle.registration_number})"
+            if vehicle
+            else None
+        )
+        message = f"Driver {driver.full_name} ({driver.phone}) has been assigned to your trip."
+        if vehicle_desc:
+            message += f" They'll arrive in a {vehicle_desc}."
         _notify(
             trip.patient,
             "Driver Assigned",
-            f"Driver {driver.full_name} has been assigned to your trip.",
-            {"trip_id": str(trip.id), "driver_id": str(driver.id)},
+            message,
+            {
+                "trip_id": str(trip.id),
+                "driver_id": str(driver.id),
+                "driver_name": driver.full_name,
+                "driver_phone": driver.phone,
+                "vehicle": vehicle_desc,
+            },
         )
         _notify(
             driver,
@@ -222,6 +239,35 @@ class TripService:
         if proof_photo is not None:
             trip.proof_photo = proof_photo
             update_fields.append("proof_photo")
+
+        # Final cost: Haversine distance from the trip's own stored
+        # coordinates (reliable, no external API) + waiting time from
+        # whatever the driver device reported as duration_minutes.
+        if (
+            trip.pickup_latitude is not None
+            and trip.pickup_longitude is not None
+            and trip.destination_latitude is not None
+            and trip.destination_longitude is not None
+        ):
+            from apps.billing.services import (
+                FareEstimator,
+                fare_breakdown_to_json,
+                service_type_for_trip,
+            )
+
+            breakdown = FareEstimator().estimate(
+                pickup_lat=trip.pickup_latitude,
+                pickup_lng=trip.pickup_longitude,
+                dest_lat=trip.destination_latitude,
+                dest_lng=trip.destination_longitude,
+                service_type=service_type_for_trip(trip),
+                waiting_minutes=trip.duration_minutes or 0,
+                scheduled_at=trip.scheduled_at,
+            )
+            trip.final_fare = breakdown["total_fare"]
+            trip.final_fare_breakdown = fare_breakdown_to_json(breakdown)
+            update_fields += ["final_fare", "final_fare_breakdown"]
+
         trip.save(update_fields=update_fields)
         _push_trip_status(trip.id, trip.status)
         _notify(

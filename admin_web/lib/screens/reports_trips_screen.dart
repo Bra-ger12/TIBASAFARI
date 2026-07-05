@@ -90,8 +90,9 @@ class _ReportsTripsScreenState extends State<ReportsTripsScreen> {
                 trips
                     .map((t) => {
                           'Reference': t.reference,
-                          'Patient': t.patient?.name ?? '',
-                          'Driver': t.driver?.name ?? '',
+                          'Patient': t.patientName,
+                          'PatientEmail': t.patientEmail,
+                          'Driver': t.driverName,
                           'Vehicle': t.vehicle?.plate ?? '',
                           'Pickup': t.pickup,
                           'Dropoff': t.dropoff,
@@ -113,7 +114,7 @@ class _ReportsTripsScreenState extends State<ReportsTripsScreen> {
           if (snap.connectionState != ConnectionState.done) {
             return const LoadingRows();
           }
-          final summary = snap.data!['summary'];
+          final summary = snap.data!;
           final trips = (snap.data!['trips'] as List)
               .map((e) => Trip.fromJson(e as Map<String, dynamic>))
               .toList();
@@ -135,10 +136,10 @@ class _ReportsTripsScreenState extends State<ReportsTripsScreen> {
                     _stat('Completed', summary['completed'].toString(),
                         AppTheme.primary),
                     _stat('Total Revenue',
-                        formatCurrency((summary['totalRevenue'] as num).toDouble()),
+                        formatCurrency((summary['total_revenue'] as num).toDouble()),
                         const Color(0xFF7C3AED)),
                     _stat('Total Distance',
-                        '${summary['totalDistance']} km', const Color(0xFFF59E0B)),
+                        '${summary['total_distance']} km', const Color(0xFFF59E0B)),
                   ],
                 );
               }),
@@ -161,6 +162,7 @@ class _ReportsTripsScreenState extends State<ReportsTripsScreen> {
                             columns: const [
                               DataColumn(label: Text('Reference')),
                               DataColumn(label: Text('Patient')),
+                              DataColumn(label: Text('Patient Email')),
                               DataColumn(label: Text('Driver')),
                               DataColumn(label: Text('Route')),
                               DataColumn(label: Text('Distance'), numeric: true),
@@ -174,8 +176,15 @@ class _ReportsTripsScreenState extends State<ReportsTripsScreen> {
                                               fontFamily: 'monospace',
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600))),
-                                      DataCell(Text(t.patient?.name ?? '—')),
-                                      DataCell(Text(t.driver?.name ?? '—')),
+                                      DataCell(Text(t.patientName.isEmpty
+                                          ? '—'
+                                          : t.patientName)),
+                                      DataCell(Text(t.patientEmail.isEmpty
+                                          ? '—'
+                                          : t.patientEmail)),
+                                      DataCell(Text(t.driverName.isEmpty
+                                          ? '—'
+                                          : t.driverName)),
                                       DataCell(Text('${t.pickup} → ${t.dropoff}',
                                           style: const TextStyle(fontSize: 11))),
                                       DataCell(Text('${t.distanceKm} km')),

@@ -1,3 +1,7 @@
+// ignore_for_file: avoid_web_libraries_in_flutter
+
+import 'dart:html' as html;
+
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
@@ -27,11 +31,17 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     // Load recent trips for this driver
     final tripItems = await ApiService.list('/trips/?driver=$driverId&limit=10')
         .catchError((_) => <Map<String, dynamic>>[]);
+    final completedCount = tripItems
+        .where((t) => (t['status'] as String?) == 'COMPLETED')
+        .length;
     return {
       'driver': profile,
       'trips': tripItems,
       'stats': <String, dynamic>{
-        'trips_count': profile['trips_count'] ?? tripItems.length,
+        'totalTrips': profile['trips_count'] ?? tripItems.length,
+        'completedTrips': completedCount,
+        'avgRating': profile['rating'] ?? 0,
+        'totalRevenue': 0,
       },
     };
   }
@@ -64,6 +74,13 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
               onPressed: () => _showVehicleDialog(d),
               icon: const Icon(Icons.directions_car, size: 16),
               label: const Text('Assign Vehicle'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => _confirmDelete(d),
+              icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+              label: const Text('Remove', style: TextStyle(color: Colors.red)),
+              style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red)),
             ),
           ],
           child: LayoutBuilder(builder: (context, c) {
@@ -141,7 +158,9 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                             style: const TextStyle(
                                 fontSize: 14, fontWeight: FontWeight.w600)),
                         Text(
-                            '${d.vehicle!.model} · ${vehicleTypeLabel(d.vehicle!.type)}',
+                            d.vehicle!.model.isEmpty
+                                ? vehicleTypeLabel(d.vehicle!.type)
+                                : '${d.vehicle!.model} · ${vehicleTypeLabel(d.vehicle!.type)}',
                             style: const TextStyle(
                                 fontSize: 12, color: AppTheme.textMuted)),
                       ])),
@@ -152,8 +171,139 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                   }(),
                 ]),
         ),
+        const SizedBox(height: 16),
+        SectionCard(
+          title: 'Documents & Compliance',
+          child: d.documents.isEmpty
+              ? const Text('No documents submitted yet.',
+                  style: TextStyle(fontSize: 13, color: AppTheme.textMuted))
+              : Column(
+                  children: d.documents
+                      .map((doc) => _buildDocumentRow(d, doc))
+                      .toList(),
+                ),
+        ),
       ],
     );
+  }
+
+  Widget _buildDocumentRow(Driver d, DriverDocument doc) {
+    final (label, color) = switch (doc.status) {
+      'VERIFIED' => ('Verified', Colors.green),
+      'REJECTED' => ('Rejected', Colors.red),
+      _ => ('Pending Review', Colors.amber[800]!),
+    };
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  doc.docTypeDisplay.isNotEmpty ? doc.docTypeDisplay : doc.docType,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+              StatusBadge(
+                tone: doc.status == 'VERIFIED'
+                    ? StatusTone.green
+                    : doc.status == 'REJECTED'
+                        ? StatusTone.red
+                        : StatusTone.amber,
+                label: label,
+                dot: true,
+              ),
+            ],
+          ),
+          if (doc.fileUrl != null) ...[
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () => html.window.open(doc.fileUrl!, '_blank'),
+              child: Text('View document',
+                  style: TextStyle(fontSize: 12, color: color, decoration: TextDecoration.underline)),
+            ),
+          ],
+          if (doc.status == 'REJECTED' && doc.rejectionReason.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(doc.rejectionReason,
+                style: const TextStyle(fontSize: 12, color: Colors.red)),
+          ],
+          if (doc.status == 'PENDING') ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                OutlinedButton(
+                  onPressed: () => _reviewDocument(d, doc, verified: true),
+                  child: const Text('Verify'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () => _reviewDocument(d, doc, verified: false),
+                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                  child: const Text('Reject'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _reviewDocument(Driver d, DriverDocument doc, {required bool verified}) async {
+    String reason = '';
+    if (!verified) {
+      reason = await showDialog<String>(
+            context: context,
+            builder: (ctx) {
+              final controller = TextEditingController();
+              return AlertDialog(
+                title: const Text('Reject Document'),
+                content: TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Reason for rejection'),
+                ),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel')),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                    child: const Text('Reject'),
+                  ),
+                ],
+              );
+            },
+          ) ??
+          '';
+      if (reason.isEmpty) return;
+    }
+    try {
+      await ApiService.patch(
+        '/drivers/profiles/${d.id}/documents/${doc.id}/review/',
+        {
+          'status': verified ? 'VERIFIED' : 'REJECTED',
+          'rejection_reason': reason,
+        },
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(verified ? 'Document verified.' : 'Document rejected.')));
+        setState(() => _future = _load());
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
   }
 
   Widget _infoLine(IconData icon, String text) {
@@ -279,6 +429,38 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     ).then((_) {
       setState(() => _future = _load());
     });
+  }
+
+  Future<void> _confirmDelete(Driver d) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Driver?'),
+        content: Text(
+            'This removes ${d.name}\'s driver profile (license, vehicle assignment, availability). '
+            'Their user account and trip history are not affected. This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ApiService.delete('/drivers/profiles/${d.id}/');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${d.name} removed.')));
+      widget.nav.navigate(ViewKey.driversList);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 }
 

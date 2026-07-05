@@ -71,6 +71,7 @@ class _DriversListScreenState extends State<DriversListScreen> {
                   DataColumn2(label: 'Rating', key: 'rating', width: 90, hideOnSmall: true),
                   DataColumn2(label: 'Trips', key: 'trips', width: 80, numeric: true),
                   DataColumn2(label: 'License', key: 'license', width: 150, hideOnSmall: true),
+                  DataColumn2(label: 'Actions', key: 'actions', width: 90),
                 ],
                 rows: rows,
                 rowKey: (d) => d.id,
@@ -120,6 +121,12 @@ class _DriversListScreenState extends State<DriversListScreen> {
                           fontFamily: 'monospace',
                           fontSize: 11,
                           color: AppTheme.textMuted)),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline,
+                        size: 18, color: Colors.red),
+                    tooltip: 'Remove driver',
+                    onPressed: () => _confirmDelete(d),
+                  ),
                 ],
                 emptyMessage: 'No drivers found.',
               ),
@@ -128,6 +135,38 @@ class _DriversListScreenState extends State<DriversListScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _confirmDelete(Driver d) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Driver?'),
+        content: Text(
+            'This removes ${d.name}\'s driver profile (license, vehicle assignment, availability). '
+            'Their user account and trip history are not affected. This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ApiService.delete('/drivers/profiles/${d.id}/');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${d.name} removed.')));
+      setState(() => _future = _load());
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 
   Widget _statusDropdown() {

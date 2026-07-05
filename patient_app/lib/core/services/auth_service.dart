@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+import 'package:patient_app/core/services/notifications_ws_service.dart';
 import 'package:patient_app/core/services/trip_api_service.dart';
 import 'package:patient_app/models/auth_session.dart';
 
@@ -10,14 +10,13 @@ class AuthService {
   factory AuthService() => _instance;
   AuthService._internal();
 
-  // 10.0.2.2 is Android emulator's loopback — browsers can't reach it.
-  // On web, use localhost instead.
-  static const String _base = kIsWeb
-      ? 'http://localhost:8000/api/v1'
-      : String.fromEnvironment(
-          'API_BASE_URL',
-          defaultValue: 'http://10.0.2.2:8000/api/v1',
-        );
+  // Defaults to the hosted Render backend so the app works without any
+  // local setup. Override for local dev via --dart-define=API_BASE_URL=...
+  // (e.g. http://10.0.2.2:8000/api/v1 for an Android emulator).
+  static const String _base = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://tibasafari-backend.onrender.com/api/v1',
+  );
 
   // Backend errors: {"success": false, "error": {"code": "...", "message": <str or dict>}}
   // The message can be:
@@ -71,8 +70,49 @@ class AuthService {
     if (resp.statusCode != 200) {
       throw Exception(_extractError(body, 'Login failed'));
     }
+    return _sessionFromAuthData(body['data'] as Map<String, dynamic>);
+  }
 
-    final data = body['data'] as Map<String, dynamic>;
+  /// Exchanges a Google ID token (obtained client-side via google_sign_in)
+  /// for a Tiba Safari session — signs in if the email already has an
+  /// account, otherwise silently registers a new patient.
+  Future<AuthSession> loginWithGoogle({required String idToken}) async {
+    final resp = await http.post(
+      Uri.parse('$_base/patients/auth/google/'),
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: jsonEncode({'id_token': idToken}),
+    );
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    if (resp.statusCode != 200) {
+      throw Exception(_extractError(body, 'Google sign-in failed'));
+    }
+    return _sessionFromAuthData(body['data'] as Map<String, dynamic>);
+  }
+
+  /// Exchanges an Apple identity token (obtained client-side via
+  /// sign_in_with_apple) for a Tiba Safari session. [fullName] should be
+  /// passed on the very first sign-in only — Apple never includes it in
+  /// the token itself, only in a one-time client-side payload.
+  Future<AuthSession> loginWithApple({
+    required String idToken,
+    String? fullName,
+  }) async {
+    final resp = await http.post(
+      Uri.parse('$_base/patients/auth/apple/'),
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: jsonEncode({
+        'id_token': idToken,
+        if (fullName != null && fullName.isNotEmpty) 'full_name': fullName,
+      }),
+    );
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    if (resp.statusCode != 200) {
+      throw Exception(_extractError(body, 'Apple sign-in failed'));
+    }
+    return _sessionFromAuthData(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<AuthSession> _sessionFromAuthData(Map<String, dynamic> data) async {
     await TripApiService.instance.saveToken(data['access'] as String);
 
     final user = data['user'] as Map<String, dynamic>;
@@ -118,6 +158,10 @@ class AuthService {
     required String confirmPassword,
     String emergencyContactName = '',
     String emergencyContactPhone = '',
+    String mobilityNeeds = 'NONE',
+    bool oxygenRequired = false,
+    bool medicalEscortRequired = false,
+    bool ivDripRequired = false,
   }) async {
     final resp = await http.post(
       Uri.parse('$_base/patients/signup/'),
@@ -130,6 +174,10 @@ class AuthService {
         'confirm_password': confirmPassword,
         'emergency_contact_name': emergencyContactName,
         'emergency_contact_phone': emergencyContactPhone,
+        'mobility_needs': mobilityNeeds,
+        'oxygen_required': oxygenRequired,
+        'medical_escort_required': medicalEscortRequired,
+        'iv_drip_required': ivDripRequired,
       }),
     );
 
@@ -164,6 +212,7 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    NotificationsWsService.instance.disconnect();
     await TripApiService.instance.clearToken();
     await AuthSession.clear();
   }
