@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:patient_app/core/services/trip_api_service.dart';
 import 'package:patient_app/core/theme/app_theme.dart';
+import 'package:patient_app/models/facility.dart';
+import 'package:patient_app/models/fare_breakdown.dart';
+import 'package:patient_app/screens/rides/facility_search_screen.dart';
+import 'package:patient_app/widgets/fare_estimate_card.dart';
 
 // ── Color aliases ─────────────────────────────────────────────────────────────
 const Color cTeal = AppColors.primary;
@@ -29,13 +35,34 @@ class _BookRideScreenState extends State<BookRideScreen> {
 
   DateTime? _scheduledAt;
   bool _isLoading = false;
+  bool _resolvingLocation = false;
+  // Guards against _onPickupTextEdited wiping out coordinates that
+  // _useCurrentLocation just set programmatically on the same controller.
+  bool _settingPickupProgrammatically = false;
+
+  // Location picker results (populated via facility search, GPS capture,
+  // or a manual address with no coordinates attached).
+  double? _pickupLat;
+  double? _pickupLng;
+  double? _destLat;
+  double? _destLng;
+  String? _destinationFacilityId;
+  FareBreakdown? _lastFareEstimate;
 
   // Mobility & service
   String _mobilityAid = 'NONE';
   String _serviceLevel = 'CURB';
   bool _oxygenRequired = false;
+  bool _medicalEscortRequired = false;
+  bool _ivDripRequired = false;
   bool _bariatric = false;
   int _numAttendants = 0;
+
+  // Populated from the patient's profile (set at signup) so we don't ask
+  // them to re-enter medical needs they already told us about. If their
+  // profile has nothing on file, we nudge them to fill it in here instead.
+  bool _profileLoaded = false;
+  bool _profileHasMedicalNeeds = false;
 
   // Recurring
   bool _isRecurring = false;
@@ -66,11 +93,64 @@ class _BookRideScreenState extends State<BookRideScreen> {
   static const _dayLabels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
   @override
+  void initState() {
+    super.initState();
+    _loadMedicalNeedsFromProfile();
+  }
+
+  @override
   void dispose() {
     _pickupCtrl.dispose();
     _destCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
+  }
+
+  /// Maps the patient's profile-level mobility need (set once at signup) to
+  /// the trip-level mobility aid options offered at booking time.
+  static String _mobilityAidFromProfile(String? mobilityNeeds) {
+    switch (mobilityNeeds) {
+      case 'WHEELCHAIR':
+        return 'MANUAL_WC';
+      case 'STRETCHER':
+        return 'STRETCHER';
+      case 'WALKER_CRUTCHES':
+        return 'AMBULATORY';
+      default:
+        return 'NONE';
+    }
+  }
+
+  /// Pre-fills Mobility Aid / Medical Support from the patient's saved
+  /// profile so they aren't asked to re-enter what they already gave us at
+  /// signup. If the profile has nothing on file, we leave the fields blank
+  /// and show a banner recommending they fill them in for this trip.
+  Future<void> _loadMedicalNeedsFromProfile() async {
+    try {
+      final profile = await TripApiService.instance.getPatientProfile();
+      final mobilityNeeds = profile['mobility_needs'] as String?;
+      final oxygen = profile['oxygen_required'] as bool? ?? false;
+      final escort = profile['medical_escort_required'] as bool? ?? false;
+      final ivDrip = profile['iv_drip_required'] as bool? ?? false;
+      final hasNeeds = (mobilityNeeds != null && mobilityNeeds != 'NONE') ||
+          oxygen ||
+          escort ||
+          ivDrip;
+
+      if (!mounted) return;
+      setState(() {
+        _profileLoaded = true;
+        _profileHasMedicalNeeds = hasNeeds;
+        if (hasNeeds) {
+          _mobilityAid = _mobilityAidFromProfile(mobilityNeeds);
+          _oxygenRequired = oxygen;
+          _medicalEscortRequired = escort;
+          _ivDripRequired = ivDrip;
+        }
+      });
+    } catch (_) {
+      if (mounted) setState(() => _profileLoaded = true);
+    }
   }
 
   Future<void> _pickDateTime() async {
@@ -137,10 +217,19 @@ class _BookRideScreenState extends State<BookRideScreen> {
           mobilityAid: _mobilityAid,
           serviceLevel: _serviceLevel,
           oxygenRequired: _oxygenRequired,
+          medicalEscortRequired: _medicalEscortRequired,
+          ivDripRequired: _ivDripRequired,
           bariatric: _bariatric,
           numAttendants: _numAttendants,
           specialRequirements: _buildSpecialReqs(),
           notes: _notesCtrl.text.trim(),
+          pickupLat: _pickupLat,
+          pickupLng: _pickupLng,
+          destLat: _destLat,
+          destLng: _destLng,
+          estimatedFare: _lastFareEstimate?.totalFare,
+          estimatedFareBreakdown: _lastFareEstimate?.toJson(),
+          destinationFacilityId: _destinationFacilityId,
         );
         final data = result['data'] as Map<String, dynamic>? ?? result;
         final tripId = data['id']?.toString();
@@ -167,11 +256,130 @@ class _BookRideScreenState extends State<BookRideScreen> {
   String _buildSpecialReqs() {
     final parts = <String>[];
     if (_oxygenRequired) parts.add('Oxygen required');
+    if (_medicalEscortRequired) parts.add('Medical escort required');
+    if (_ivDripRequired) parts.add('IV drip required');
     if (_bariatric) parts.add('Bariatric');
     if (_numAttendants > 0) parts.add('$_numAttendants attendant(s)');
     final notes = _notesCtrl.text.trim();
     if (notes.isNotEmpty) parts.add(notes);
     return parts.join('; ');
+  }
+
+  /// Mirrors the backend's service_type_for_trip() (apps/billing/services.py)
+  /// so the live fare estimate matches what complete_trip will bill later.
+  String _fareServiceType() {
+    if (_mobilityAid == 'MANUAL_WC' || _mobilityAid == 'POWER_WC') {
+      return 'wheelchair';
+    }
+    if (_oxygenRequired ||
+        _medicalEscortRequired ||
+        _ivDripRequired ||
+        _bariatric ||
+        _mobilityAid == 'STRETCHER') {
+      return 'medical_equipment';
+    }
+    return 'basic';
+  }
+
+  /// Searches our own free, OSM-seeded facility database (GET
+  /// /facilities/search/) instead of the Google Places "Select Hospital"
+  /// picker, which needs billing we don't have enabled.
+  Future<void> _pickDestinationFacility() async {
+    final facility = await Navigator.push<Facility>(
+      context,
+      MaterialPageRoute(builder: (_) => const FacilitySearchScreen()),
+    );
+    if (facility == null || !mounted) return;
+    setState(() {
+      _destCtrl.text = facility.name;
+      _destLat = facility.latitude;
+      _destLng = facility.longitude;
+      _destinationFacilityId = facility.id;
+      _lastFareEstimate = null; // stale until FareEstimateSection re-fetches
+    });
+  }
+
+  /// Captures the device's raw GPS fix (via `geolocator`) and reverse-geocodes
+  /// it on-device (via `geocoding` — no Places/Maps API call) into a readable
+  /// pickup address, for patients whose exact pickup point isn't a named
+  /// place in Google Places (e.g. a home address or roadside spot).
+  Future<void> _useCurrentLocation() async {
+    setState(() => _resolvingLocation = true);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Location services are disabled. Please enable GPS.');
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permission was denied.');
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception(
+          'Location permission is permanently denied. Enable it from '
+          'device Settings to use your current location.',
+        );
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+
+      var address =
+          '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final p = placemarks.first;
+          final parts = [p.street, p.subLocality, p.locality]
+              .where((s) => (s ?? '').trim().isNotEmpty)
+              .join(', ');
+          if (parts.isNotEmpty) address = parts;
+        }
+      } catch (_) {
+        // Reverse geocoding unavailable (offline/unsupported) — fall back
+        // to raw coordinates rather than blocking the booking flow.
+      }
+
+      if (!mounted) return;
+      _settingPickupProgrammatically = true;
+      setState(() {
+        _pickupCtrl.text = address;
+        _pickupLat = position.latitude;
+        _pickupLng = position.longitude;
+        _lastFareEstimate = null;
+      });
+      _settingPickupProgrammatically = false;
+    } catch (e) {
+      if (mounted) {
+        _snack(e.toString().replaceFirst('Exception: ', ''), isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _resolvingLocation = false);
+    }
+  }
+
+  /// Manually typing over a GPS-captured address means the previously
+  /// captured coordinates no longer match the text, so drop them — the
+  /// fare estimate needs real coordinates, not a guess tied to stale ones.
+  void _onPickupTextEdited(String _) {
+    if (_settingPickupProgrammatically) return;
+    if (_pickupLat == null && _pickupLng == null) return;
+    setState(() {
+      _pickupLat = null;
+      _pickupLng = null;
+      _lastFareEstimate = null;
+    });
   }
 
   void _snack(String msg, {bool isError = false}) {
@@ -205,10 +413,26 @@ class _BookRideScreenState extends State<BookRideScreen> {
                     _sectionCard(title: 'Route', children: [
                       _field(ctrl: _pickupCtrl, label: 'Pickup Location',
                           icon: Icons.trip_origin_rounded,
-                          validator: (v) => (v ?? '').isEmpty ? 'Required' : null),
+                          onChanged: _onPickupTextEdited,
+                          validator: (v) => (v ?? '').isEmpty ? 'Required' : null,
+                          suffix: IconButton(
+                            tooltip: 'Use my current location',
+                            icon: _resolvingLocation
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: cTeal),
+                                  )
+                                : const Icon(Icons.my_location_rounded,
+                                    color: cTeal, size: 18),
+                            onPressed:
+                                _resolvingLocation ? null : _useCurrentLocation,
+                          )),
                       const SizedBox(height: 14),
-                      _field(ctrl: _destCtrl, label: 'Destination',
-                          icon: Icons.location_on_rounded,
+                      _field(ctrl: _destCtrl, label: 'Destination (Hospital)',
+                          icon: Icons.local_hospital_rounded,
+                          onTap: _pickDestinationFacility,
                           validator: (v) => (v ?? '').isEmpty ? 'Required' : null),
                     ]),
                     const SizedBox(height: 16),
@@ -244,6 +468,57 @@ class _BookRideScreenState extends State<BookRideScreen> {
                       ),
                     ]),
                     const SizedBox(height: 16),
+
+                    // ── Medical needs banner ────────────────────────────────
+                    if (_profileLoaded && !_profileHasMedicalNeeds) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: cAmber.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: cAmber.withValues(alpha: 0.4)),
+                        ),
+                        child: const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline_rounded, color: cAmber, size: 20),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                "You didn't set any Mobility Assistance or Medical Support on your "
+                                "profile. If you need any for this trip, please select it below.",
+                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: cTealDeep),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ] else if (_profileHasMedicalNeeds) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: cTealLight,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.check_circle_outline_rounded, color: cTeal, size: 20),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Pre-filled from your profile — adjust below if this trip is different.',
+                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: cTealDeep),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
                     // ── Mobility Aid ────────────────────────────────────────
                     _sectionCard(title: 'Mobility Aid', children: [
@@ -289,13 +564,31 @@ class _BookRideScreenState extends State<BookRideScreen> {
                     ]),
                     const SizedBox(height: 16),
 
-                    // ── Medical Needs ────────────────────────────────────────
-                    _sectionCard(title: 'Medical Requirements', children: [
+                    // ── Medical Support ─────────────────────────────────────
+                    _sectionCard(title: 'Medical Support', children: [
                       SwitchListTile(
                         value: _oxygenRequired,
                         onChanged: (v) => setState(() => _oxygenRequired = v),
                         title: const Text('Oxygen Support', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep)),
                         secondary: const Icon(Icons.monitor_heart_rounded, color: cTeal, size: 20),
+                        activeThumbColor: Colors.white,
+                        activeTrackColor: cTeal,
+                        contentPadding: EdgeInsets.zero, dense: true,
+                      ),
+                      SwitchListTile(
+                        value: _medicalEscortRequired,
+                        onChanged: (v) => setState(() => _medicalEscortRequired = v),
+                        title: const Text('Medical Escort', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep)),
+                        secondary: const Icon(Icons.medical_services_rounded, color: cTeal, size: 20),
+                        activeThumbColor: Colors.white,
+                        activeTrackColor: cTeal,
+                        contentPadding: EdgeInsets.zero, dense: true,
+                      ),
+                      SwitchListTile(
+                        value: _ivDripRequired,
+                        onChanged: (v) => setState(() => _ivDripRequired = v),
+                        title: const Text('IV Drip Required', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep)),
+                        secondary: const Icon(Icons.water_drop_rounded, color: cTeal, size: 20),
                         activeThumbColor: Colors.white,
                         activeTrackColor: cTeal,
                         contentPadding: EdgeInsets.zero, dense: true,
@@ -329,6 +622,24 @@ class _BookRideScreenState extends State<BookRideScreen> {
                       ),
                     ]),
                     const SizedBox(height: 16),
+
+                    // ── Fare Estimate ─────────────────────────────────────────
+                    if (!_isRecurring &&
+                        _pickupLat != null &&
+                        _pickupLng != null &&
+                        _destLat != null &&
+                        _destLng != null) ...[
+                      FareEstimateSection(
+                        pickupLat: _pickupLat!,
+                        pickupLng: _pickupLng!,
+                        destLat: _destLat!,
+                        destLng: _destLng!,
+                        serviceType: _fareServiceType(),
+                        scheduledAt: _scheduledAt,
+                        onEstimate: (b) => _lastFareEstimate = b,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
                     // ── Recurring ─────────────────────────────────────────────
                     _sectionCard(title: 'Recurring Schedule', children: [
@@ -465,15 +776,25 @@ class _BookRideScreenState extends State<BookRideScreen> {
     required String label,
     required IconData icon,
     String? Function(String?)? validator,
+    VoidCallback? onTap,
+    void Function(String)? onChanged,
+    Widget? suffix,
     int maxLines = 1,
   }) {
     return TextFormField(
       controller: ctrl,
       maxLines: maxLines,
+      readOnly: onTap != null,
+      onTap: onTap,
+      onChanged: onChanged,
       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep),
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: cTeal, size: 20),
+        suffixIcon: suffix ??
+            (onTap != null
+                ? const Icon(Icons.search, color: cMuted, size: 18)
+                : null),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: cBorder)),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: cBorder)),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: cTeal, width: 2)),

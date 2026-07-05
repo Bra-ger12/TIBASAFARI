@@ -29,7 +29,10 @@ class TripChatScreen extends StatefulWidget {
 }
 
 class _TripChatScreenState extends State<TripChatScreen> {
-  static const _wsBase = 'ws://10.0.2.2:8000';
+  static const _wsBase = String.fromEnvironment(
+    'WS_BASE_URL',
+    defaultValue: 'wss://tibasafari-backend.onrender.com',
+  );
 
   final _messages = <TripChatMessage>[];
   final _controller = TextEditingController();

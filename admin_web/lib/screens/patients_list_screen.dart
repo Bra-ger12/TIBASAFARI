@@ -104,7 +104,9 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
                     ]),
                   ]),
                   p.age != null ? '${p.age} · ${p.gender ?? ""}' : '—',
-                  p.address ?? '—',
+                  (p.address != null && p.address!.isNotEmpty)
+                      ? p.address!
+                      : (p.email ?? '—'),
                   p.specialNeeds == null || p.specialNeeds!.isEmpty
                       ? const Text('—',
                           style: TextStyle(

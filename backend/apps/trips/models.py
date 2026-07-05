@@ -85,6 +85,17 @@ class Trip(models.Model):
         on_delete=models.SET_NULL,
         related_name="trips",
     )
+    # Optional link to the picked destination facility. destination_address/
+    # lat/lng below are copied at booking time and are the source of truth
+    # for the trip regardless of this FK, so if the facility is later
+    # deleted (SET_NULL) the trip's own destination data is unaffected.
+    destination_facility = models.ForeignKey(
+        "facilities.HealthFacility",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="trips",
+    )
 
     # Addresses & coordinates
     pickup_address = models.CharField(max_length=255)
@@ -106,6 +117,8 @@ class Trip(models.Model):
         max_length=10, choices=ServiceLevel.choices, default=ServiceLevel.CURB_TO_CURB
     )
     oxygen_required = models.BooleanField(default=False)
+    medical_escort_required = models.BooleanField(default=False)
+    iv_drip_required = models.BooleanField(default=False)
     bariatric = models.BooleanField(default=False)
     num_attendants = models.PositiveSmallIntegerField(default=0, help_text="Number of accompanying attendants")
     special_requirements = models.TextField(blank=True)
@@ -114,7 +127,15 @@ class Trip(models.Model):
     # Metrics (filled in on completion)
     distance_km = models.DecimalField(max_digits=8, decimal_places=3, null=True, blank=True)
     duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+
+    # Fare quoted to the patient before booking (see FareEstimator /
+    # POST /trips/estimate-fare/) — client may attach it at booking time.
     estimated_fare = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    estimated_fare_breakdown = models.JSONField(default=dict, blank=True)
+
+    # Actual fare computed on completion (see TripService.complete_trip).
+    final_fare = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    final_fare_breakdown = models.JSONField(default=dict, blank=True)
 
     # Proof of service (captured by the driver on completion)
     signature = models.ImageField(upload_to="trip_proofs/signatures/", null=True, blank=True)

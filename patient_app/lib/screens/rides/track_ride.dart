@@ -58,6 +58,10 @@ class _TrackRideScreenState extends State<TrackRideScreen>
   String _tripStatus = 'ACCEPTED';
   LatLng? _driverLatLng;
 
+  String? _driverName;
+  String? _driverPhone;
+  String? _vehicleLabel;
+
   StreamSubscription<Map<String, double>>? _locationSub;
   StreamSubscription<String>? _statusSub;
 
@@ -82,7 +86,43 @@ class _TrackRideScreenState extends State<TrackRideScreen>
         ),
       );
     });
+    _driverName = widget.driverName;
+    _driverPhone = widget.driverPhone;
+    _vehicleLabel = widget.vehicleNumber;
     _connectTracking();
+    _loadTripDetails();
+  }
+
+  /// Fetches driver_name/driver_phone/driver_vehicle_* for this trip —
+  /// populated once a driver has been assigned (TripSerializer, backend).
+  Future<void> _loadTripDetails() async {
+    final id = widget.rideId;
+    if (id == null) return;
+    try {
+      final trip = await TripApiService.instance.getTrip(id);
+      if (!mounted) return;
+      final name = trip['driver_name'] as String?;
+      final make = trip['driver_vehicle_make'] as String?;
+      final model = trip['driver_vehicle_model'] as String?;
+      final plate = trip['driver_vehicle_registration'] as String?;
+      final vehicleParts = [
+        if (make != null && make.isNotEmpty) make,
+        if (model != null && model.isNotEmpty) model,
+      ].join(' ');
+      setState(() {
+        if (name != null && name.isNotEmpty) _driverName = name;
+        final phone = trip['driver_phone'] as String?;
+        if (phone != null && phone.isNotEmpty) _driverPhone = phone;
+        if (vehicleParts.isNotEmpty || (plate != null && plate.isNotEmpty)) {
+          _vehicleLabel = [
+            if (vehicleParts.isNotEmpty) vehicleParts,
+            if (plate != null && plate.isNotEmpty) plate,
+          ].join(' • ');
+        }
+      });
+    } catch (_) {
+      // Non-fatal: keep showing whatever was passed via nav args, if any.
+    }
   }
 
   @override
@@ -123,8 +163,8 @@ class _TrackRideScreenState extends State<TrackRideScreen>
         position: _driverLatLng!,
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
         infoWindow: InfoWindow(
-          title: widget.driverName ?? 'Driver',
-          snippet: widget.vehicleNumber,
+          title: _driverName ?? 'Driver',
+          snippet: _vehicleLabel,
         ),
       ),
     };
@@ -236,7 +276,7 @@ class _TrackRideScreenState extends State<TrackRideScreen>
   // ── Driver Card ─────────────────────────────────────────────────────────────
 
   Widget _buildDriverCard() {
-    final name = widget.driverName ?? 'Driver';
+    final name = _driverName ?? 'Driver';
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -271,7 +311,7 @@ class _TrackRideScreenState extends State<TrackRideScreen>
                           style: AppFonts.sora(fontSize: 15, fontWeight: FontWeight.w700, color: cTealDeep)),
                       const SizedBox(height: 3),
                       Text(
-                        '${widget.vehicleNumber ?? "Vehicle"} • ${_statusLabel()}',
+                        '${_vehicleLabel ?? "Vehicle"} • ${_statusLabel()}',
                         style: const TextStyle(fontSize: 12.5, color: cMuted, fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -299,12 +339,12 @@ class _TrackRideScreenState extends State<TrackRideScreen>
                     children: [
                       Expanded(child: _contactButton(
                         icon: Icons.phone_rounded, label: 'Call', color: cTeal,
-                        onTap: widget.driverPhone != null ? () => _callDriver() : null,
+                        onTap: _driverPhone != null ? () => _callDriver() : null,
                       )),
                       const SizedBox(width: 12),
                       Expanded(child: _contactButton(
                         icon: Icons.chat_bubble_outline_rounded, label: 'Message', color: cBlue,
-                        onTap: widget.driverPhone != null ? () => _smsDriver() : null,
+                        onTap: _driverPhone != null ? () => _smsDriver() : null,
                       )),
                     ],
                   ),
@@ -513,14 +553,14 @@ class _TrackRideScreenState extends State<TrackRideScreen>
   }
 
   void _callDriver() async {
-    final phone = widget.driverPhone;
+    final phone = _driverPhone;
     if (phone == null) return;
     final uri = Uri.parse('tel:$phone');
     if (await canLaunchUrl(uri)) launchUrl(uri);
   }
 
   void _smsDriver() async {
-    final phone = widget.driverPhone;
+    final phone = _driverPhone;
     if (phone == null) return;
     final uri = Uri.parse('sms:$phone');
     if (await canLaunchUrl(uri)) launchUrl(uri);

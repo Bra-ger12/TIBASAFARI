@@ -1,7 +1,13 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from apps.patients.views import PatientProfileViewSet, PatientSignupView, PatientTripRequestViewSet
+from apps.patients.views import (
+    AppleAuthView,
+    GoogleAuthView,
+    PatientProfileViewSet,
+    PatientSignupView,
+    PatientTripRequestViewSet,
+)
 
 router = DefaultRouter()
 router.register("profiles", PatientProfileViewSet, basename="patient-profiles")
@@ -9,5 +15,7 @@ router.register("trip-requests", PatientTripRequestViewSet, basename="patient-tr
 
 urlpatterns = [
     path("signup/", PatientSignupView.as_view(), name="patient-signup"),
+    path("auth/google/", GoogleAuthView.as_view(), name="patient-google-auth"),
+    path("auth/apple/", AppleAuthView.as_view(), name="patient-apple-auth"),
     path("", include(router.urls)),
 ]

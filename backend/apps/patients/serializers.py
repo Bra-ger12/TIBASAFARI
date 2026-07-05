@@ -3,7 +3,8 @@ from rest_framework import serializers
 
 from apps.accounts.models import User
 from apps.patients.models import PatientProfile
-from apps.rbac.models import Permission, Role, UserRole
+from apps.patients.services import get_or_create_patient_role
+from apps.rbac.models import UserRole
 from apps.trips.models import Trip
 
 
@@ -26,6 +27,9 @@ class PatientProfileSerializer(serializers.ModelSerializer):
             "emergency_contact_phone",
             "medical_notes",
             "mobility_needs",
+            "oxygen_required",
+            "medical_escort_required",
+            "iv_drip_required",
             "default_pickup_address",
             "trips_count",
             "created_at",
@@ -55,12 +59,19 @@ class PatientProfileSerializer(serializers.ModelSerializer):
 
 
 class PatientTripRequestSerializer(serializers.ModelSerializer):
+    destination_facility_name = serializers.SerializerMethodField()
+
+    def get_destination_facility_name(self, obj):
+        return obj.destination_facility.name if obj.destination_facility_id else None
+
     class Meta:
         model = Trip
         fields = (
             "id",
             "pickup_address",
             "destination_address",
+            "destination_facility",
+            "destination_facility_name",
             "pickup_latitude",
             "pickup_longitude",
             "destination_latitude",
@@ -69,14 +80,18 @@ class PatientTripRequestSerializer(serializers.ModelSerializer):
             "mobility_aid",
             "service_level",
             "oxygen_required",
+            "medical_escort_required",
+            "iv_drip_required",
             "bariatric",
             "num_attendants",
             "special_requirements",
             "notes",
+            "estimated_fare",
+            "estimated_fare_breakdown",
             "status",
             "created_at",
         )
-        read_only_fields = ("id", "status", "created_at")
+        read_only_fields = ("id", "status", "created_at", "destination_facility_name")
 
 
 class PatientSignupSerializer(serializers.Serializer):
@@ -87,6 +102,14 @@ class PatientSignupSerializer(serializers.Serializer):
     confirm_password = serializers.CharField(write_only=True, trim_whitespace=False)
     emergency_contact_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     emergency_contact_phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    mobility_needs = serializers.ChoiceField(
+        choices=PatientProfile.MobilityNeeds.choices,
+        required=False,
+        default=PatientProfile.MobilityNeeds.NONE,
+    )
+    oxygen_required = serializers.BooleanField(required=False, default=False)
+    medical_escort_required = serializers.BooleanField(required=False, default=False)
+    iv_drip_required = serializers.BooleanField(required=False, default=False)
 
     def validate_email(self, value):
         email = value.strip().lower()
@@ -105,32 +128,37 @@ class PatientSignupSerializer(serializers.Serializer):
         password = validated_data.pop("password")
         emergency_contact_name = validated_data.pop("emergency_contact_name", "")
         emergency_contact_phone = validated_data.pop("emergency_contact_phone", "")
+        mobility_needs = validated_data.pop("mobility_needs", PatientProfile.MobilityNeeds.NONE)
+        oxygen_required = validated_data.pop("oxygen_required", False)
+        medical_escort_required = validated_data.pop("medical_escort_required", False)
+        iv_drip_required = validated_data.pop("iv_drip_required", False)
         user = User.objects.create_user(
             password=password,
             status=User.Status.ACTIVE,
             is_active=True,
             **validated_data,
         )
-        UserRole.objects.get_or_create(user=user, role=self._patient_role())
+        UserRole.objects.get_or_create(user=user, role=get_or_create_patient_role())
         PatientProfile.objects.create(
             user=user,
             emergency_contact_name=emergency_contact_name,
             emergency_contact_phone=emergency_contact_phone,
+            mobility_needs=mobility_needs,
+            oxygen_required=oxygen_required,
+            medical_escort_required=medical_escort_required,
+            iv_drip_required=iv_drip_required,
         )
         return user
 
-    def _patient_role(self):
-        role, _ = Role.objects.get_or_create(
-            code="PATIENT",
-            defaults={"name": "Patient", "description": "Patient user"},
-        )
-        permission_codes = {
-            "create_trip": "Create trip",
-            "view_own_trips": "View own trips",
-            "view_own_profile": "View own profile",
-            "view_notifications": "View notifications",
-        }
-        for code, name in permission_codes.items():
-            perm, _ = Permission.objects.get_or_create(code=code, defaults={"name": name})
-            role.permissions.add(perm)
-        return role
+
+class GoogleAuthSerializer(serializers.Serializer):
+    id_token = serializers.CharField(write_only=True)
+
+
+class AppleAuthSerializer(serializers.Serializer):
+    id_token = serializers.CharField(write_only=True)
+    # Apple only ever sends the user's name once, out-of-band, on the very
+    # first authorization — the client must capture and forward it here.
+    full_name = serializers.CharField(
+        max_length=150, required=False, allow_blank=True
+    )

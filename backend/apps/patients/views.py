@@ -1,13 +1,16 @@
-from rest_framework import filters, mixins, status, viewsets
+from rest_framework import exceptions, filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.serializers import UserSerializer
+from apps.accounts.social_auth import verify_apple_id_token, verify_google_id_token
 from apps.core.responses import success_response
 from apps.patients.models import PatientProfile
 from apps.patients.serializers import (
+    AppleAuthSerializer,
+    GoogleAuthSerializer,
     PatientProfileSerializer,
     PatientSignupSerializer,
     PatientTripRequestSerializer,
@@ -33,6 +36,55 @@ class PatientSignupView(APIView):
             "user": UserSerializer(user).data,
         }
         return success_response(data, "Patient account created", status=status.HTTP_201_CREATED)
+
+
+def _social_login_response(user, message: str):
+    if not user.is_approved:
+        raise exceptions.PermissionDenied("Account is not active")
+    refresh = RefreshToken.for_user(user)
+    data = {
+        "access": str(refresh.access_token),
+        "refresh": str(refresh),
+        "user": UserSerializer(user).data,
+    }
+    return success_response(data, message)
+
+
+class GoogleAuthView(APIView):
+    """Sign in (or silently register) a patient from a Google ID token
+    obtained client-side via the google_sign_in package."""
+
+    permission_classes = [AllowAny]
+    serializer_class = GoogleAuthSerializer
+    service = PatientService()
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        claims = verify_google_id_token(serializer.validated_data["id_token"])
+        user = self.service.find_or_create_social_patient(
+            email=claims["email"], full_name=claims["full_name"],
+        )
+        return _social_login_response(user, "Signed in with Google")
+
+
+class AppleAuthView(APIView):
+    """Sign in (or silently register) a patient from an Apple identity
+    token obtained client-side via the sign_in_with_apple package."""
+
+    permission_classes = [AllowAny]
+    serializer_class = AppleAuthSerializer
+    service = PatientService()
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        claims = verify_apple_id_token(serializer.validated_data["id_token"])
+        full_name = serializer.validated_data.get("full_name") or claims["full_name"]
+        user = self.service.find_or_create_social_patient(
+            email=claims["email"], full_name=full_name,
+        )
+        return _social_login_response(user, "Signed in with Apple")
 
 
 class PatientProfileViewSet(viewsets.ModelViewSet):

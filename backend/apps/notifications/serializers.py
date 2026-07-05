@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.notifications.models import Notification, NotificationPreference
+from apps.notifications.models import Broadcast, Notification, NotificationPreference
 
 
 class NotificationPreferenceSerializer(serializers.ModelSerializer):
@@ -27,3 +27,18 @@ class NotificationSerializer(serializers.ModelSerializer):
             "read_at",
         )
         read_only_fields = ("id", "recipient_email", "created_at", "read_at")
+
+
+class BroadcastSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Broadcast
+        fields = (
+            "id",
+            "title",
+            "message",
+            "audience",
+            "channel",
+            "recipient_count",
+            "created_at",
+        )
+        read_only_fields = ("id", "recipient_count", "created_at")

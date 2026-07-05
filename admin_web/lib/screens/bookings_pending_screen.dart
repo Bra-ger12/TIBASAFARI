@@ -84,7 +84,7 @@ class _BookingsPendingScreenState extends State<BookingsPendingScreen> {
     setState(() => _actionLoading = true);
     try {
       await ApiService.post(
-          '/trips/${_assignTarget!.id}/assign-driver/', {'driver': driverId});
+          '/trips/${_assignTarget!.id}/assign-driver/', {'driver_id': driverId});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Driver assigned to ${_assignTarget!.reference}.')));
@@ -155,17 +155,9 @@ class _BookingsPendingScreenState extends State<BookingsPendingScreen> {
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppTheme.textPrimary)),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(b.patient?.name ?? '—',
-                          style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w500)),
-                      Text(b.patient?.phone ?? '',
-                          style: const TextStyle(
-                              fontSize: 11, color: AppTheme.textMuted)),
-                    ],
-                  ),
+                  Text(b.patientName.isEmpty ? '—' : b.patientName,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w500)),
                   '${b.pickup} → ${b.dropoff}',
                   formatDate(b.scheduledAt, withTime: true),
                   b.specialNeeds == null || b.specialNeeds!.isEmpty

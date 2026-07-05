@@ -18,7 +18,8 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework import exceptions
 
-from apps.billing.models import Invoice, Payment
+from apps.billing.models import Invoice, Payment, PricingConfig
+from apps.core.geo import haversine_distance_km
 from apps.trips.models import Trip
 
 
@@ -103,6 +104,129 @@ class FareCalculator:
             "total_amount": total,
             "amount_due": total,
             "amount_paid": Decimal("0.00"),
+        }
+
+
+# Local hour (Africa/Dar_es_Salaam, per settings.TIME_ZONE) windows during
+# which the peak-hour surcharge applies: 7-9am, 12-1pm, 5-7pm. Each tuple is
+# [start, end) — end-exclusive.
+PEAK_HOUR_WINDOWS = [(7, 9), (12, 13), (17, 19)]
+
+
+def _is_peak_hour(dt) -> bool:
+    local_hour = timezone.localtime(dt).hour
+    return any(start <= local_hour < end for start, end in PEAK_HOUR_WINDOWS)
+
+
+def _is_urban_zone(lat, lng, config: PricingConfig) -> bool:
+    if lat is None or lng is None:
+        return False
+    distance = haversine_distance_km(
+        lat, lng, config.urban_zone_center_lat, config.urban_zone_center_lng
+    )
+    return distance <= float(config.urban_zone_radius_km)
+
+
+def fare_breakdown_to_json(breakdown: dict) -> dict:
+    """FareEstimator.estimate() returns Decimal values (correct for the DRF
+    response, which serializes them to strings automatically) — but a raw
+    dict with Decimal objects isn't JSON-serializable, so it can't be
+    assigned directly to a JSONField. Call this first when persisting a
+    breakdown (see TripService.complete_trip)."""
+    return {k: (str(v) if isinstance(v, Decimal) else v) for k, v in breakdown.items()}
+
+
+def service_type_for_trip(trip: Trip) -> str:
+    """Maps a Trip's mobility/medical fields onto a PricingConfig service
+    type, for the final (post-completion) fare calculation."""
+    if trip.needs_wheelchair_vehicle():
+        return PricingConfig.ServiceType.WHEELCHAIR
+    if (
+        trip.oxygen_required
+        or trip.medical_escort_required
+        or trip.iv_drip_required
+        or trip.bariatric
+        or trip.mobility_aid == Trip.MobilityAid.STRETCHER
+    ):
+        return PricingConfig.ServiceType.MEDICAL_EQUIPMENT
+    return PricingConfig.ServiceType.BASIC
+
+
+class FareEstimator:
+    """Hybrid fare calculator: base fare + Haversine distance + waiting
+    time + service-type multiplier + peak-hour/urban-zone surcharges.
+
+    No external distance/geocoding API — distance comes from the Haversine
+    formula applied to raw lat/lng points. Used both for the pre-booking
+    /trips/estimate-fare/ quote and the post-completion final cost
+    (TripService.complete_trip).
+    """
+
+    def __init__(self, config: PricingConfig = None):
+        self.config = config or PricingConfig.get_active()
+
+    def estimate(
+        self,
+        *,
+        pickup_lat,
+        pickup_lng,
+        dest_lat,
+        dest_lng,
+        service_type: str = PricingConfig.ServiceType.BASIC,
+        waiting_minutes: int = 0,
+        scheduled_at=None,
+    ) -> dict:
+        scheduled_at = scheduled_at or timezone.now()
+        cfg = self.config
+
+        # ── Distance (Haversine — no external API) ─────────────────────
+        distance_km = _d(haversine_distance_km(pickup_lat, pickup_lng, dest_lat, dest_lng))
+        waiting_minutes = max(0, int(waiting_minutes))
+
+        # ── Base + distance + waiting-time components ──────────────────
+        base_fare = _d(cfg.base_fare)
+        distance_charge = _d(distance_km * cfg.per_km_rate)
+        waiting_charge = _d(_d(waiting_minutes) * cfg.per_minute_wait_rate)
+        subtotal_before_multiplier = base_fare + distance_charge + waiting_charge
+
+        # ── Service-type multiplier (basic / wheelchair / medical equip.) ─
+        multiplier = cfg.multiplier_for(service_type)
+        subtotal_after_multiplier = _d(subtotal_before_multiplier * multiplier)
+
+        # ── Peak-hour surcharge: 7-9am, 12-1pm, 5-7pm local time (+20% default) ─
+        is_peak = _is_peak_hour(scheduled_at)
+        peak_surcharge_amount = (
+            _d(subtotal_after_multiplier * cfg.peak_hour_surcharge_pct)
+            if is_peak
+            else Decimal("0.00")
+        )
+
+        # ── Urban zone markup: pickup within radius of city center (+10% default) ─
+        is_urban = _is_urban_zone(pickup_lat, pickup_lng, cfg)
+        zone_surcharge_amount = (
+            _d(subtotal_after_multiplier * cfg.urban_zone_surcharge_pct)
+            if is_urban
+            else Decimal("0.00")
+        )
+
+        total_fare = subtotal_after_multiplier + peak_surcharge_amount + zone_surcharge_amount
+        total_fare = max(total_fare, _d(cfg.minimum_fare))
+
+        return {
+            "distance_km": float(distance_km),
+            "base_fare": base_fare,
+            "distance_charge": distance_charge,
+            "waiting_minutes": waiting_minutes,
+            "waiting_charge": waiting_charge,
+            "service_type": str(service_type),
+            "service_multiplier": multiplier,
+            "subtotal_after_multiplier": subtotal_after_multiplier,
+            "is_peak_hour": is_peak,
+            "peak_surcharge_amount": peak_surcharge_amount,
+            "is_urban_zone": is_urban,
+            "zone_surcharge_amount": zone_surcharge_amount,
+            "minimum_fare": _d(cfg.minimum_fare),
+            "total_fare": total_fare,
         }
 
 

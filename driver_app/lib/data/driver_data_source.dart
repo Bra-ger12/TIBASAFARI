@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -21,7 +20,6 @@ abstract class DriverDataSource {
     required String phoneNumber,
     required String email,
     required String licenseNumber,
-    required String vehicleRegistration,
     required String password,
     required String confirmPassword,
   });
@@ -52,8 +50,6 @@ abstract class DriverDataSource {
     required String tripId,
     double? distanceKm,
     int? durationMinutes,
-    required Uint8List signatureBytes,
-    File? photoFile,
   });
 
   Future<Map<String, dynamic>> updateUserProfile(Map<String, dynamic> fields);
@@ -136,7 +132,6 @@ class ApiDriverDataSource implements DriverDataSource {
     required String phoneNumber,
     required String email,
     required String licenseNumber,
-    required String vehicleRegistration,
     required String password,
     required String confirmPassword,
   }) async {
@@ -148,7 +143,6 @@ class ApiDriverDataSource implements DriverDataSource {
         'phone_number': phoneNumber.trim(),
         'email': email.trim(),
         'license_number': licenseNumber.trim(),
-        'vehicle_registration': vehicleRegistration.trim(),
         'password': password,
         'confirm_password': confirmPassword,
       },
@@ -235,44 +229,14 @@ class ApiDriverDataSource implements DriverDataSource {
     required String tripId,
     double? distanceKm,
     int? durationMinutes,
-    required Uint8List signatureBytes,
-    File? photoFile,
   }) async {
-    final token = _requireToken();
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$_baseUrl/trips/$tripId/complete/'),
-    )
-      ..headers['Authorization'] = 'Bearer $token'
-      ..headers['Accept'] = 'application/json';
-
-    if (distanceKm != null) {
-      request.fields['distance_km'] = distanceKm.toString();
-    }
-    if (durationMinutes != null) {
-      request.fields['duration_minutes'] = durationMinutes.toString();
-    }
-    request.files.add(http.MultipartFile.fromBytes(
-      'signature',
-      signatureBytes,
-      filename: 'signature.png',
-    ));
-    if (photoFile != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath('proof_photo', photoFile.path),
-      );
-    }
-
-    final streamed = await request.send();
-    final response = await http.Response.fromStream(streamed);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(_errorMessage(response));
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map<String, dynamic>) {
-      throw Exception('Unexpected API response');
-    }
-    return _tripFromJson(_unwrapMap(decoded));
+    final body = <String, dynamic>{
+      'distance_km': ?distanceKm,
+      'duration_minutes': ?durationMinutes,
+    };
+    final response =
+        await _request('POST', '/trips/$tripId/complete/', body: body);
+    return _tripFromJson(_unwrapMap(response));
   }
 
   @override
@@ -446,7 +410,7 @@ class ApiDriverDataSource implements DriverDataSource {
       tripsToday: tripsToday,
       totalTrips: completedTrips.length,
       earningsTodayTzs: earningsToday.round(),
-      rating: 0,
+      rating: _doubleValue(profile['rating']) ?? 0,
       assignedTrips: trips,
       isLoggedIn: true,
     );

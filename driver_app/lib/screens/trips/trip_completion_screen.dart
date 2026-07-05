@@ -1,15 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:signature/signature.dart';
 
 import '../../core/models/driver_session.dart';
 import '../../core/theme/colors.dart';
 import '../../services/driver_service.dart';
 
-/// Captures proof-of-service (passenger signature + optional photo) and
-/// submits the trip completion, including distance/duration, to the backend.
+/// Submits the trip completion, including distance/duration, to the backend.
 class TripCompletionScreen extends StatefulWidget {
   final DriverAssignedTrip trip;
   final double? initialDistanceKm;
@@ -29,14 +24,7 @@ class TripCompletionScreen extends StatefulWidget {
 class _TripCompletionScreenState extends State<TripCompletionScreen> {
   late final TextEditingController _distanceCtrl;
   late final TextEditingController _durationCtrl;
-  final SignatureController _signatureCtrl = SignatureController(
-    penStrokeWidth: 3,
-    penColor: cTealDeep,
-    exportBackgroundColor: Colors.white,
-  );
-  final ImagePicker _imagePicker = ImagePicker();
 
-  File? _photo;
   bool _isSubmitting = false;
   String? _error;
 
@@ -57,81 +45,20 @@ class _TripCompletionScreenState extends State<TripCompletionScreen> {
   void dispose() {
     _distanceCtrl.dispose();
     _durationCtrl.dispose();
-    _signatureCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _pickPhoto(ImageSource source) async {
-    final file = await _imagePicker.pickImage(source: source, imageQuality: 80);
-    if (file != null && mounted) {
-      setState(() => _photo = File(file.path));
-    }
-  }
-
-  void _showPhotoSourceSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-        decoration: const BoxDecoration(
-          color: cSurface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              decoration:
-                  BoxDecoration(color: cBorder, borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: 20),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_rounded, color: cTeal),
-              title: const Text('Take Photo'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickPhoto(ImageSource.camera);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_rounded, color: cTeal),
-              title: const Text('Choose from Gallery'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickPhoto(ImageSource.gallery);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _submit() async {
-    if (_signatureCtrl.isEmpty) {
-      setState(() => _error = 'Passenger signature is required to complete the trip.');
-      return;
-    }
-
     setState(() {
       _isSubmitting = true;
       _error = null;
     });
 
     try {
-      final signatureBytes = await _signatureCtrl.toPngBytes();
-      if (signatureBytes == null) {
-        throw Exception('Could not capture signature. Please try again.');
-      }
       await DriverService.instance.completeTrip(
         tripId: widget.trip.id,
         distanceKm: double.tryParse(_distanceCtrl.text.trim()),
         durationMinutes: int.tryParse(_durationCtrl.text.trim()),
-        signatureBytes: signatureBytes,
-        photoFile: _photo,
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -160,10 +87,6 @@ class _TripCompletionScreenState extends State<TripCompletionScreen> {
                     _buildTripSummary(),
                     const SizedBox(height: 20),
                     _buildMetricsRow(),
-                    const SizedBox(height: 20),
-                    _buildSignatureSection(),
-                    const SizedBox(height: 20),
-                    _buildPhotoSection(),
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       _buildErrorBanner(_error!),
@@ -295,92 +218,6 @@ class _TripCompletionScreenState extends State<TripCompletionScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSignatureSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('Passenger Signature',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cText)),
-            TextButton(
-              onPressed: () => setState(_signatureCtrl.clear),
-              child: const Text('Clear', style: TextStyle(color: cError)),
-            ),
-          ],
-        ),
-        Container(
-          height: 180,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cBorder),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Signature(controller: _signatureCtrl, backgroundColor: Colors.white),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPhotoSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Proof Photo (optional)',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cText)),
-        const SizedBox(height: 10),
-        if (_photo == null)
-          InkWell(
-            onTap: _showPhotoSourceSheet,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              height: 100,
-              decoration: BoxDecoration(
-                color: cSurface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cBorder, style: BorderStyle.solid),
-              ),
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add_a_photo_rounded, color: cTeal),
-                    SizedBox(height: 6),
-                    Text('Add Photo', style: TextStyle(color: cMuted, fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-            ),
-          )
-        else
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.file(_photo!, height: 160, width: double.infinity, fit: BoxFit.cover),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: InkWell(
-                  onTap: _showPhotoSourceSheet,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                    child: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                  ),
-                ),
-              ),
-            ],
-          ),
-      ],
     );
   }
 

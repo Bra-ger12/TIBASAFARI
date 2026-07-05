@@ -1,13 +1,11 @@
-from datetime import date
-
 from django.db import transaction
+from django.db.models import Avg, Count
 from rest_framework import serializers
 
 from apps.accounts.models import User
 from apps.drivers.models import DriverDocument, DriverProfile
-from apps.operations.models import Vehicle
 from apps.rbac.models import Permission, Role, UserRole
-from apps.trips.models import Trip
+from apps.trips.models import Trip, TripRating
 
 
 class DriverProfileSerializer(serializers.ModelSerializer):
@@ -19,6 +17,9 @@ class DriverProfileSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     trips_count = serializers.SerializerMethodField()
+    rating = serializers.SerializerMethodField()
+    rating_count = serializers.SerializerMethodField()
+    documents = serializers.SerializerMethodField()
 
     class Meta:
         model = DriverProfile
@@ -33,6 +34,9 @@ class DriverProfileSerializer(serializers.ModelSerializer):
             "vehicle_registration",
             "is_available",
             "trips_count",
+            "rating",
+            "rating_count",
+            "documents",
             "current_latitude",
             "current_longitude",
             "last_location_at",
@@ -46,13 +50,36 @@ class DriverProfileSerializer(serializers.ModelSerializer):
             "user_phone",
             "vehicle_registration",
             "trips_count",
+            "rating",
+            "rating_count",
+            "documents",
             "last_location_at",
             "created_at",
             "updated_at",
         )
 
+    def get_documents(self, obj):
+        return DriverDocumentSerializer(
+            obj.documents.all(), many=True, context=self.context
+        ).data
+
     def get_trips_count(self, obj):
         return Trip.objects.filter(driver=obj.user).count()
+
+    def _rating_stats(self, obj):
+        # Computed on read rather than stored/recalculated on write — always
+        # accurate, and TripRating is created directly in TripViewSet.rate()
+        # with no signal/hook that could otherwise trigger a recompute.
+        return TripRating.objects.filter(trip__driver=obj.user).aggregate(
+            avg=Avg("score"), count=Count("id")
+        )
+
+    def get_rating(self, obj):
+        avg = self._rating_stats(obj)["avg"]
+        return round(avg, 1) if avg is not None else 0.0
+
+    def get_rating_count(self, obj):
+        return self._rating_stats(obj)["count"]
 
     def validate_user(self, value):
         queryset = DriverProfile.objects.filter(user=value)
@@ -89,6 +116,22 @@ class DriverDocumentSerializer(serializers.ModelSerializer):
             "uploaded_at",
             "reviewed_at",
         )
+
+
+class DriverDocumentReviewSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=(DriverDocument.Status.VERIFIED, DriverDocument.Status.REJECTED)
+    )
+    rejection_reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate(self, attrs):
+        if attrs["status"] == DriverDocument.Status.REJECTED and not attrs.get(
+            "rejection_reason"
+        ):
+            raise serializers.ValidationError(
+                {"rejection_reason": "A reason is required when rejecting a document."}
+            )
+        return attrs
 
 
 class DriverSosSerializer(serializers.Serializer):
@@ -145,7 +188,6 @@ class DriverSignupSerializer(serializers.Serializer):
         allow_blank=True,
     )
     license_number = serializers.CharField(max_length=80)
-    vehicle_registration = serializers.CharField(max_length=32)
     password = serializers.CharField(
         write_only=True,
         min_length=6,
@@ -167,12 +209,6 @@ class DriverSignupSerializer(serializers.Serializer):
             raise serializers.ValidationError("Driver license is already registered")
         return license_number
 
-    def validate_vehicle_registration(self, value):
-        registration = value.strip().upper()
-        if not registration:
-            raise serializers.ValidationError("Vehicle registration is required")
-        return registration
-
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError(
@@ -184,18 +220,8 @@ class DriverSignupSerializer(serializers.Serializer):
     def create(self, validated_data):
         validated_data.pop("confirm_password")
         password = validated_data.pop("password")
-        registration = validated_data.pop("vehicle_registration")
         license_number = validated_data.pop("license_number")
 
-        vehicle, _ = Vehicle.objects.get_or_create(
-            registration_number=registration,
-            defaults={
-                "make": "Pending",
-                "model": "Verification",
-                "year": date.today().year,
-                "capacity": 4,
-            },
-        )
         user = User.objects.create_user(
             password=password,
             status=User.Status.ACTIVE,
@@ -206,7 +232,6 @@ class DriverSignupSerializer(serializers.Serializer):
         return DriverProfile.objects.create(
             user=user,
             license_number=license_number,
-            vehicle=vehicle,
         )
 
     def _driver_role(self):

@@ -16,7 +16,8 @@ class ApiException implements Exception {
 
 /// REST client for the Tiba Safari Django backend.
 ///
-/// Base URL: set the dart-define `API_BASE` at build/run time, e.g.
+/// Base URL: defaults to the hosted Render backend. Override for local dev
+/// via the dart-define `API_BASE`, e.g.
 ///   flutter run -d chrome --dart-define=API_BASE=http://localhost:8000/api/v1
 ///
 /// All authenticated requests attach `Authorization: Bearer <access_token>`
@@ -29,7 +30,7 @@ class ApiException implements Exception {
 class ApiService {
   static const String _base = String.fromEnvironment(
     'API_BASE',
-    defaultValue: 'http://localhost:8000/api/v1',
+    defaultValue: 'https://tibasafari-backend.onrender.com/api/v1',
   );
 
   static Map<String, String> get _headers {

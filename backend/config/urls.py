@@ -34,6 +34,7 @@ api_patterns = [
     path("patients/", include("apps.patients.urls")),
     path("drivers/", include("apps.drivers.urls")),
     path("trips/", include("apps.trips.urls")),
+    path("facilities/", include("apps.facilities.urls")),
     path("notifications/", include("apps.notifications.urls")),
     path("billing/", include("apps.billing.urls")),
     path("dashboard/", include("apps.dashboard.urls")),

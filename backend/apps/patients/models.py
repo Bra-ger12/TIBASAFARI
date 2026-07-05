@@ -5,6 +5,12 @@ from django.db import models
 
 
 class PatientProfile(models.Model):
+    class MobilityNeeds(models.TextChoices):
+        NONE = "NONE", "None"
+        WHEELCHAIR = "WHEELCHAIR", "Wheelchair"
+        STRETCHER = "STRETCHER", "Stretcher"
+        WALKER_CRUTCHES = "WALKER_CRUTCHES", "Walker / Crutches"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -15,7 +21,12 @@ class PatientProfile(models.Model):
     emergency_contact_name = models.CharField(max_length=150, blank=True)
     emergency_contact_phone = models.CharField(max_length=32, blank=True)
     medical_notes = models.TextField(blank=True)
-    mobility_needs = models.CharField(max_length=150, blank=True)
+    mobility_needs = models.CharField(
+        max_length=20, choices=MobilityNeeds.choices, default=MobilityNeeds.NONE, blank=True
+    )
+    oxygen_required = models.BooleanField(default=False)
+    medical_escort_required = models.BooleanField(default=False)
+    iv_drip_required = models.BooleanField(default=False)
     default_pickup_address = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
