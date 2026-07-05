@@ -1,4 +1,4 @@
-from rest_framework import exceptions, filters, status, viewsets
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 
@@ -7,8 +7,6 @@ from apps.rbac.permissions import RBACPermission, has_permission
 from apps.trips.models import RecurringSchedule, Trip, TripRating
 from apps.trips.serializers import (
     AssignDriverSerializer,
-    FareBreakdownSerializer,
-    FareEstimateRequestSerializer,
     RecurringScheduleSerializer,
     SendTripMessageSerializer,
     TripCreateSerializer,
@@ -49,7 +47,6 @@ class TripViewSet(viewsets.ModelViewSet):
         "cancel": "cancel_trip",
         "rate": "view_own_trips",
         "messages": "trip_messages",
-        "estimate_fare": "create_trip",
     }
 
     def get_serializer_class(self):
@@ -58,9 +55,7 @@ class TripViewSet(viewsets.ModelViewSet):
         return super().get_serializer_class()
 
     def get_queryset(self):
-        queryset = Trip.objects.select_related(
-            "patient", "driver", "recurring_schedule", "destination_facility"
-        )
+        queryset = Trip.objects.select_related("patient", "driver", "recurring_schedule")
         status_value = self.request.query_params.get("status")
         if status_value:
             queryset = queryset.filter(status=status_value)
@@ -74,29 +69,6 @@ class TripViewSet(viewsets.ModelViewSet):
         patient = serializer.validated_data.pop("patient", self.request.user)
         trip = self.service.create_trip(patient=patient, **serializer.validated_data)
         serializer.instance = trip
-
-    @action(detail=False, methods=["post"], url_path="estimate-fare")
-    def estimate_fare(self, request):
-        """Pre-booking fare quote — POST /api/v1/trips/estimate-fare/.
-        Does not touch the database; the patient app calls this as they
-        pick pickup/destination, before submitting the actual booking."""
-        from apps.billing.services import FareEstimator
-
-        serializer = FareEstimateRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        breakdown = FareEstimator().estimate(
-            pickup_lat=data["pickup_latitude"],
-            pickup_lng=data["pickup_longitude"],
-            dest_lat=data["destination_latitude"],
-            dest_lng=data["destination_longitude"],
-            service_type=data.get("service_type", "basic"),
-            waiting_minutes=data.get("waiting_minutes", 0),
-            scheduled_at=data.get("scheduled_at"),
-        )
-        return success_response(
-            FareBreakdownSerializer(breakdown).data, "Fare estimate calculated"
-        )
 
     @action(detail=True, methods=["post"], url_path="assign-driver")
     def assign_driver(self, request, pk=None):
@@ -149,11 +121,20 @@ class TripViewSet(viewsets.ModelViewSet):
     def rate(self, request, pk=None):
         trip = self.get_object()
         if trip.patient != request.user:
-            raise exceptions.PermissionDenied("You can only rate your own trips")
+            return success_response(
+                None, "You can only rate your own trips",
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if trip.status != Trip.Status.COMPLETED:
-            raise exceptions.ValidationError("Only completed trips can be rated")
+            return success_response(
+                None, "Only completed trips can be rated",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if hasattr(trip, "rating"):
-            raise exceptions.ValidationError("This trip has already been rated")
+            return success_response(
+                None, "This trip has already been rated",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = TripRatingCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         rating = TripRating.objects.create(

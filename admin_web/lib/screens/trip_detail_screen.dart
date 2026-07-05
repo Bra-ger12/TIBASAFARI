@@ -107,51 +107,49 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (t.patientName.isNotEmpty)
+        if (t.patient != null)
           SectionCard(
             title: 'Patient',
             child: InkWell(
-              onTap: () => widget.nav.openDetail('patient', t.patientId),
+              onTap: () => widget.nav.openDetail('patient', t.patient!.id),
               child: Row(children: [
-                AvatarCircle(name: t.patientName, color: AppTheme.primary),
+                AvatarCircle(name: t.patient!.name, color: AppTheme.primary),
                 const SizedBox(width: 12),
                 Expanded(
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      Text(t.patientName,
+                      Text(t.patient!.name,
                           style: const TextStyle(
                               fontSize: 14, fontWeight: FontWeight.w600)),
-                      if (t.patientEmail.isNotEmpty)
-                        Text(t.patientEmail,
-                            style: const TextStyle(
-                                fontSize: 12, color: AppTheme.textMuted)),
+                      Text(t.patient!.phone,
+                          style: const TextStyle(
+                              fontSize: 12, color: AppTheme.textMuted)),
                     ])),
               ]),
             ),
           ),
         const SizedBox(height: 16),
-        if (t.driverName.isNotEmpty)
+        if (t.driver != null)
           SectionCard(
             title: 'Driver',
             child: InkWell(
-              onTap: () => widget.nav.openDetail('driver', t.driverId),
+              onTap: () => widget.nav.openDetail('driver', t.driver!.id),
               child: Row(children: [
                 AvatarCircle(
-                    name: t.driverName,
-                    color: avatarColor(null)),
+                    name: t.driver!.name,
+                    color: avatarColor(t.driver!.avatarColor)),
                 const SizedBox(width: 12),
                 Expanded(
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      Text(t.driverName,
+                      Text(t.driver!.name,
                           style: const TextStyle(
                               fontSize: 14, fontWeight: FontWeight.w600)),
-                      if (t.driverEmail.isNotEmpty)
-                        Text(t.driverEmail,
-                            style: const TextStyle(
-                                fontSize: 12, color: AppTheme.textMuted)),
+                      Text(t.driver!.phone,
+                          style: const TextStyle(
+                              fontSize: 12, color: AppTheme.textMuted)),
                     ])),
               ]),
             ),

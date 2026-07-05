@@ -58,10 +58,10 @@ class _BookingsAllScreenState extends State<BookingsAllScreen> {
             rows = rows
                 .where((b) =>
                     b.reference.toLowerCase().contains(q) ||
-                    b.patientName.toLowerCase().contains(q) ||
+                    (b.patient?.name.toLowerCase().contains(q) ?? false) ||
                     b.pickup.toLowerCase().contains(q) ||
                     b.dropoff.toLowerCase().contains(q) ||
-                    b.driverName.toLowerCase().contains(q))
+                    (b.driver?.name.toLowerCase().contains(q) ?? false))
                 .toList();
           }
           return Column(
@@ -91,12 +91,12 @@ class _BookingsAllScreenState extends State<BookingsAllScreen> {
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppTheme.primary)),
-                  Text(b.patientName.isEmpty ? '—' : b.patientName,
+                  Text(b.patient?.name ?? '—',
                       style: const TextStyle(
                           fontSize: 13, fontWeight: FontWeight.w500)),
                   '${b.pickup} → ${b.dropoff}',
                   formatDate(b.scheduledAt, withTime: true),
-                  b.driverName.isEmpty ? 'Unassigned' : b.driverName,
+                  b.driver?.name ?? 'Unassigned',
                   formatCurrency(b.fare),
                   () {
                     final meta = bookingStatus(b.status);

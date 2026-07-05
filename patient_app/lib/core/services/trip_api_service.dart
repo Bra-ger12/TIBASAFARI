@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
@@ -11,12 +12,12 @@ class TripApiService {
   TripApiService._();
   static final instance = TripApiService._();
 
-  // Defaults to the hosted Render backend so the app works without any
-  // local setup. Override for local dev via --dart-define=API_BASE_URL=...
-  static const String _base = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'https://tibasafari-backend.onrender.com/api/v1',
-  );
+  static const String _base = kIsWeb
+      ? 'http://localhost:8000/api/v1'
+      : String.fromEnvironment(
+          'API_BASE_URL',
+          defaultValue: 'http://10.0.2.2:8000/api/v1',
+        );
 
   // ── Auth helpers ──────────────────────────────────────────────────────────
 
@@ -64,8 +65,6 @@ class TripApiService {
     String mobilityAid = 'NONE',
     String serviceLevel = 'CURB',
     bool oxygenRequired = false,
-    bool medicalEscortRequired = false,
-    bool ivDripRequired = false,
     bool bariatric = false,
     int numAttendants = 0,
     String specialRequirements = '',
@@ -74,9 +73,6 @@ class TripApiService {
     double? pickupLng,
     double? destLat,
     double? destLng,
-    double? estimatedFare,
-    Map<String, dynamic>? estimatedFareBreakdown,
-    String? destinationFacilityId,
   }) async {
     final body = <String, dynamic>{
       'pickup_address': pickupAddress,
@@ -85,8 +81,6 @@ class TripApiService {
       'mobility_aid': mobilityAid,
       'service_level': serviceLevel,
       'oxygen_required': oxygenRequired,
-      'medical_escort_required': medicalEscortRequired,
-      'iv_drip_required': ivDripRequired,
       'bariatric': bariatric,
       'num_attendants': numAttendants,
       'special_requirements': specialRequirements,
@@ -95,11 +89,6 @@ class TripApiService {
       if (pickupLng != null) 'pickup_longitude': pickupLng,
       if (destLat != null) 'destination_latitude': destLat,
       if (destLng != null) 'destination_longitude': destLng,
-      if (estimatedFare != null) 'estimated_fare': estimatedFare,
-      if (estimatedFareBreakdown != null)
-        'estimated_fare_breakdown': estimatedFareBreakdown,
-      if (destinationFacilityId != null)
-        'destination_facility': destinationFacilityId,
     };
     return _post('/patients/trip-requests/', body);
   }
@@ -139,13 +128,6 @@ class TripApiService {
   Future<List<dynamic>> getMyTrips() async {
     final resp = await _get('/patients/trip-requests/');
     return _extractList(resp);
-  }
-
-  /// Fetches a single trip by id, including driver_name/driver_phone/
-  /// driver_vehicle_* once a driver has been assigned.
-  Future<Map<String, dynamic>> getTrip(String tripId) async {
-    final resp = await _get('/trips/$tripId/');
-    return (resp['data'] as Map<String, dynamic>?) ?? {};
   }
 
   Future<Map<String, dynamic>> cancelTrip(String tripId) =>
@@ -408,16 +390,7 @@ class TripApiService {
         final err = decoded['error'];
         if (err is Map) {
           final m = err['message'];
-          if (m is String) {
-            msg = m;
-          } else if (m is List && m.isNotEmpty) {
-            // DRF wraps a single ValidationError string in a list, e.g.
-            // ["Only completed trips can be rated"] — unwrap it rather
-            // than showing the raw Dart list representation.
-            msg = m.first.toString();
-          } else if (m != null) {
-            msg = m.toString();
-          }
+          msg = m is String ? m : (m?.toString() ?? msg);
         } else {
           msg = decoded['detail']?.toString() ?? msg;
         }

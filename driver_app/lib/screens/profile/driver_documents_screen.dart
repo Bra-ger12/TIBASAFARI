@@ -17,6 +17,8 @@ class DriverDocumentsScreen extends StatefulWidget {
 class _DriverDocumentsScreenState extends State<DriverDocumentsScreen> {
   static const _docTypes = [
     ('LICENSE', "Driver's License", Icons.badge_outlined),
+    ('INSURANCE', 'Vehicle Insurance', Icons.shield_outlined),
+    ('VEHICLE_REGISTRATION', 'Vehicle Registration', Icons.description_outlined),
   ];
 
   bool _isLoading = true;

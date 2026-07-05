@@ -4,9 +4,6 @@
 
 class Driver {
   final String id;
-  /// User.id — the account id backend `/assign-driver/` expects, distinct
-  /// from `id` (the DriverProfile primary key).
-  final String userId;
   final String name;
   final String email;
   final String phone;
@@ -19,11 +16,9 @@ class Driver {
   final String? vehicleId;
   final String? vehiclePlate;
   final Vehicle? vehicle;
-  final List<DriverDocument> documents;
 
   Driver({
     required this.id,
-    required this.userId,
     required this.name,
     required this.email,
     required this.phone,
@@ -35,7 +30,6 @@ class Driver {
     this.vehicleId,
     this.vehiclePlate,
     this.vehicle,
-    this.documents = const [],
   });
 
   factory Driver.fromJson(Map<String, dynamic> j) {
@@ -44,7 +38,6 @@ class Driver {
     final isAvailable = j['is_available'] as bool? ?? true;
     return Driver(
       id: (j['id'] ?? '').toString(),
-      userId: (j['user'] ?? j['userId'] ?? j['id'] ?? '').toString(),
       name: j['user_full_name'] as String? ??
           j['name'] as String? ??
           j['user_email'] as String? ??
@@ -67,58 +60,7 @@ class Driver {
           j['vehiclePlate'] as String?,
       vehicle: j['vehicle'] is Map<String, dynamic>
           ? Vehicle.fromJson(j['vehicle'] as Map<String, dynamic>)
-          : (j['vehicle'] != null && j['vehicle'].toString().isNotEmpty)
-              // Backend only sends the vehicle as a bare UUID + a flat
-              // vehicle_registration string here, not a nested object —
-              // build a minimal Vehicle so the assigned car still shows.
-              ? Vehicle(
-                  id: j['vehicle'].toString(),
-                  plate: j['vehicle_registration'] as String? ?? '',
-                  model: '',
-                  make: '',
-                  year: 0,
-                  type: 'ambulance',
-                  capacity: 4,
-                  status: 'available',
-                )
-              : null,
-      documents: (j['documents'] as List?)
-              ?.whereType<Map<String, dynamic>>()
-              .map(DriverDocument.fromJson)
-              .toList() ??
-          const [],
-    );
-  }
-}
-
-class DriverDocument {
-  final String id;
-  final String docType;
-  final String docTypeDisplay;
-  final String? fileUrl;
-  final String status;
-  final String rejectionReason;
-  final String? uploadedAt;
-
-  DriverDocument({
-    required this.id,
-    required this.docType,
-    required this.docTypeDisplay,
-    required this.status,
-    required this.rejectionReason,
-    this.fileUrl,
-    this.uploadedAt,
-  });
-
-  factory DriverDocument.fromJson(Map<String, dynamic> j) {
-    return DriverDocument(
-      id: (j['id'] ?? '').toString(),
-      docType: j['doc_type'] as String? ?? '',
-      docTypeDisplay: j['doc_type_display'] as String? ?? '',
-      fileUrl: j['file'] as String?,
-      status: j['status'] as String? ?? 'PENDING',
-      rejectionReason: j['rejection_reason'] as String? ?? '',
-      uploadedAt: j['uploaded_at'] as String?,
+          : null,
     );
   }
 }
@@ -259,7 +201,6 @@ class Booking {
   final double fare;
   final String? driverId;
   final Driver? driver;
-  final String driverName;
   final String createdAt;
 
   Booking({
@@ -283,7 +224,6 @@ class Booking {
     required this.fare,
     this.driverId,
     this.driver,
-    this.driverName = '',
     required this.createdAt,
   });
 
@@ -330,9 +270,6 @@ class Booking {
         driver: j['driver'] is Map<String, dynamic>
             ? Driver.fromJson(j['driver'] as Map<String, dynamic>)
             : null,
-        driverName: j['driver_name'] as String? ??
-            j['driverName'] as String? ??
-            '',
         createdAt: j['created_at'] as String? ??
             j['createdAt'] as String? ??
             '',
@@ -345,11 +282,9 @@ class Trip {
   final String patientId;
   final Patient? patient;
   final String patientName;
-  final String patientEmail;
   final String driverId;
   final Driver? driver;
   final String driverName;
-  final String driverEmail;
   final String vehicleId;
   final Vehicle? vehicle;
   final String pickup;
@@ -376,11 +311,9 @@ class Trip {
     required this.patientId,
     this.patient,
     required this.patientName,
-    this.patientEmail = '',
     required this.driverId,
     this.driver,
     required this.driverName,
-    this.driverEmail = '',
     required this.vehicleId,
     this.vehicle,
     required this.pickup,
@@ -417,9 +350,6 @@ class Trip {
             j['patientName'] as String? ??
             j['patient_email'] as String? ??
             '',
-        patientEmail: j['patient_email'] as String? ??
-            j['patientEmail'] as String? ??
-            '',
         driverId: (j['driver'] is String
                 ? j['driver']
                 : j['driverId'] ?? '')
@@ -430,9 +360,6 @@ class Trip {
         driverName: j['driver_name'] as String? ??
             j['driverName'] as String? ??
             j['driver_email'] as String? ??
-            '',
-        driverEmail: j['driver_email'] as String? ??
-            j['driverEmail'] as String? ??
             '',
         vehicleId: (j['vehicle'] is String
                 ? j['vehicle']

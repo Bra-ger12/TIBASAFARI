@@ -1,5 +1,3 @@
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import exceptions, filters, status, viewsets
 from rest_framework.decorators import action
@@ -12,7 +10,6 @@ from apps.drivers.models import DriverDocument, DriverProfile
 from apps.drivers.serializers import (
     AssignedTripSerializer,
     DriverAvailabilitySerializer,
-    DriverDocumentReviewSerializer,
     DriverDocumentSerializer,
     DriverLocationSerializer,
     DriverProfileSerializer,
@@ -62,7 +59,6 @@ class DriverProfileViewSet(viewsets.ModelViewSet):
         "location": "update_location",
         "assigned_trips": "view_assigned_trips",
         "documents": "view_assigned_trips",
-        "review_document": "manage_drivers",
         "sos": "view_assigned_trips",
     }
 
@@ -152,26 +148,6 @@ class DriverProfileViewSet(viewsets.ModelViewSet):
             )
         docs = profile.documents.all()
         return success_response(DriverDocumentSerializer(docs, many=True).data)
-
-    @extend_schema(
-        request=DriverDocumentReviewSerializer, responses={200: DriverDocumentSerializer}
-    )
-    @action(detail=True, methods=["patch"], url_path="documents/(?P<document_id>[^/.]+)/review")
-    def review_document(self, request, pk=None, document_id=None):
-        """Admin/staff verify or reject a driver's uploaded document."""
-        profile = self.get_object()
-        document = get_object_or_404(DriverDocument, pk=document_id, driver=profile)
-        serializer = DriverDocumentReviewSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        document.status = serializer.validated_data["status"]
-        document.rejection_reason = serializer.validated_data.get("rejection_reason", "")
-        document.reviewed_by = request.user
-        document.reviewed_at = timezone.now()
-        document.save(update_fields=["status", "rejection_reason", "reviewed_by", "reviewed_at"])
-        return success_response(
-            DriverDocumentSerializer(document, context=self.get_serializer_context()).data,
-            "Document review saved",
-        )
 
     @extend_schema(request=DriverSosSerializer)
     @action(detail=False, methods=["post"])

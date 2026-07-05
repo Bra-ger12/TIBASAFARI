@@ -233,7 +233,7 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _AuthTextField(
-              label: 'Full name *',
+              label: 'Full name',
               hint: 'Enter full name',
               controller: _nameController,
               icon: Icons.badge_outlined,
@@ -249,7 +249,7 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
             ),
             const SizedBox(height: 16),
             _AuthTextField(
-              label: 'Email address *',
+              label: 'Email address',
               hint: 'name@tibasafari.co.tz',
               controller: _emailController,
               icon: Icons.email_outlined,
@@ -258,7 +258,7 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
             ),
             const SizedBox(height: 16),
             _AuthTextField(
-              label: 'Phone number *',
+              label: 'Phone number',
               hint: '+255 712 345 678',
               controller: _phoneController,
               icon: Icons.phone_outlined,
@@ -272,7 +272,7 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
             ),
             const SizedBox(height: 16),
             _AuthTextField(
-              label: 'Admin role *',
+              label: 'Admin role',
               hint: 'Operations manager',
               controller: _roleController,
               icon: Icons.admin_panel_settings_outlined,
@@ -284,21 +284,16 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
             ),
             const SizedBox(height: 16),
             _AuthPasswordField(
-              label: 'Password *',
+              label: 'Password',
               hint: 'Create a password',
               controller: _passwordController,
               visible: _showPassword,
               onToggle: () => setState(() => _showPassword = !_showPassword),
-              validator: _validateNewPassword,
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Must be at least 8 characters, with 1 uppercase letter and 1 number.',
-              style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+              validator: _validatePassword,
             ),
             const SizedBox(height: 16),
             _AuthPasswordField(
-              label: 'Confirm password *',
+              label: 'Confirm password',
               hint: 'Re-enter password',
               controller: _confirmPasswordController,
               visible: _showConfirmPassword,
@@ -703,20 +698,5 @@ String? _validateEmail(String? value) {
 String? _validatePassword(String? value) {
   if (value == null || value.isEmpty) return 'Enter password';
   if (value.length < 6) return 'Password must be at least 6 characters';
-  return null;
-}
-
-/// Stricter rule for new-account creation only — kept separate from
-/// [_validatePassword] (used at login) so existing admins whose passwords
-/// predate this rule aren't locked out.
-String? _validateNewPassword(String? value) {
-  if (value == null || value.isEmpty) return 'Enter password';
-  if (value.length < 8) return 'Password must be at least 8 characters';
-  if (!RegExp(r'[A-Z]').hasMatch(value)) {
-    return 'Password must include at least 1 uppercase letter';
-  }
-  if (!RegExp(r'[0-9]').hasMatch(value)) {
-    return 'Password must include at least 1 number';
-  }
   return null;
 }

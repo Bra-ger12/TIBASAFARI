@@ -24,24 +24,10 @@ DJANGO_ENV = env("DJANGO_ENV", default="development")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
-
-# Render sets this to the service's own hostname (e.g. tibasafari-backend.onrender.com)
-# at runtime — add it automatically so ALLOWED_HOSTS/CSRF don't need updating per-deploy.
-RENDER_EXTERNAL_HOSTNAME = env("RENDER_EXTERNAL_HOSTNAME", default="")
-if RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
-    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
 CORS_ALLOW_ALL_ORIGINS = env.bool(
     "CORS_ALLOW_ALL_ORIGINS",
     default=DEBUG and not CORS_ALLOWED_ORIGINS,
 )
-
-# Social sign-in (patient_app). These are OAuth *client IDs* — public
-# audience identifiers, not secrets — used to validate the `aud` claim on
-# Google/Apple identity tokens. Leave a provider's list empty to disable it
-# (the corresponding /patients/auth/*/ endpoint returns 400 until set).
-GOOGLE_OAUTH_CLIENT_IDS = env.list("GOOGLE_OAUTH_CLIENT_IDS", default=[])
-APPLE_SIGN_IN_CLIENT_IDS = env.list("APPLE_SIGN_IN_CLIENT_IDS", default=[])
 
 INSTALLED_APPS = [
     "daphne",
@@ -65,7 +51,6 @@ INSTALLED_APPS = [
     "apps.patients",
     "apps.drivers",
     "apps.trips",
-    "apps.facilities",
     "apps.billing",
     "apps.notifications",
     "apps.dashboard",
@@ -106,45 +91,29 @@ ASGI_APPLICATION = "config.asgi.application"
 # ============================================
 # DATABASE — PostgreSQL
 # ============================================
-# Render (and most PaaS providers) inject a single DATABASE_URL for the
-# managed Postgres instance; local dev still uses the discrete POSTGRES_* vars.
-if env("DATABASE_URL", default=""):
-    DATABASES = {"default": env.db_url("DATABASE_URL")}
-    DATABASES["default"]["CONN_MAX_AGE"] = 60
-    DATABASES["default"]["OPTIONS"] = {"connect_timeout": 10}
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": env("POSTGRES_DB", default="tibasafari"),
-            "USER": env("POSTGRES_USER", default="tibasafari"),
-            "PASSWORD": env("POSTGRES_PASSWORD", default="tibasafari"),
-            "HOST": env("POSTGRES_HOST", default="localhost"),
-            "PORT": env("POSTGRES_PORT", default="5432"),
-            "CONN_MAX_AGE": 60,
-            "OPTIONS": {
-                "connect_timeout": 10,
-            },
-        }
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": env("POSTGRES_DB", default="tibasafari"),
+        "USER": env("POSTGRES_USER", default="tibasafari"),
+        "PASSWORD": env("POSTGRES_PASSWORD", default="tibasafari"),
+        "HOST": env("POSTGRES_HOST", default="localhost"),
+        "PORT": env("POSTGRES_PORT", default="5432"),
+        "CONN_MAX_AGE": 60,
+        "OPTIONS": {
+            "connect_timeout": 10,
+        },
     }
+}
 
 # ============================================
 # CHANNEL LAYERS — Redis-backed WebSockets
 # ============================================
-# Render's managed Redis only exposes one connection string (REDIS_URL);
-# CHANNEL_LAYERS_REDIS_URL lets local dev keep pointing channels at a
-# separate logical DB index (redis://localhost:6379/1) from the cache (/0).
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [{
-                "address": env(
-                    "CHANNEL_LAYERS_REDIS_URL",
-                    default=env("REDIS_URL", default="redis://localhost:6379/1"),
-                ),
-                "protocol": 2,
-            }],
+            "hosts": [{"address": env("CHANNEL_LAYERS_REDIS_URL", default="redis://localhost:6379/1"), "protocol": 2}],
             "capacity": 1500,
             "expiry": 10,
         },

@@ -917,6 +917,10 @@ class PrivacySecurityScreen extends StatelessWidget {
       children: [
         _settingsGroup(children: [
           _settingsTile(icon: Icons.lock_outline_rounded, title: 'Change Password', subtitle: 'Update your account password', onTap: () => _showPasswordSheet(context)),
+          const Padding(padding: EdgeInsets.symmetric(horizontal: 18), child: Divider(color: cDivider, height: 1)),
+          _settingsTile(icon: Icons.fingerprint, title: 'Biometric Login', subtitle: 'Use fingerprint or face ID', onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Biometric setup initiated'), backgroundColor: cTeal, behavior: SnackBarBehavior.floating));
+          }),
         ]),
         _settingsGroup(children: [
           _settingsTile(icon: Icons.delete_outline_rounded, title: 'Delete Account', subtitle: 'Permanently delete your data', onTap: () => _showDeleteDialog(context), trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: cError)),

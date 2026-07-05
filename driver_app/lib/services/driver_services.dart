@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -75,6 +76,7 @@ class DriverService {
     required String phoneNumber,
     required String email,
     required String licenseNumber,
+    required String vehicleRegistration,
     required String password,
     required String confirmPassword,
   }) {
@@ -83,6 +85,7 @@ class DriverService {
       phoneNumber: phoneNumber,
       email: email,
       licenseNumber: licenseNumber,
+      vehicleRegistration: vehicleRegistration,
       password: password,
       confirmPassword: confirmPassword,
     );
@@ -147,11 +150,15 @@ class DriverService {
     required String tripId,
     double? distanceKm,
     int? durationMinutes,
+    required Uint8List signatureBytes,
+    File? photoFile,
   }) {
     return _dataSource.completeTrip(
       tripId: tripId,
       distanceKm: distanceKm,
       durationMinutes: durationMinutes,
+      signatureBytes: signatureBytes,
+      photoFile: photoFile,
     );
   }
 

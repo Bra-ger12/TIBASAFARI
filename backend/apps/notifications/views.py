@@ -3,14 +3,12 @@ from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 
 from apps.core.responses import success_response
-from apps.notifications.models import Broadcast, Notification, NotificationPreference
+from apps.notifications.models import Notification, NotificationPreference
 from apps.notifications.serializers import (
-    BroadcastSerializer,
     NotificationPreferenceSerializer,
     NotificationSerializer,
 )
-from apps.notifications.services import NotificationService, send_broadcast
-from apps.rbac.permissions import RBACPermission
+from apps.notifications.services import NotificationService
 
 
 class NotificationViewSet(viewsets.ModelViewSet):
@@ -54,27 +52,3 @@ class NotificationViewSet(viewsets.ModelViewSet):
             serializer.save()
             return success_response(serializer.data, "Preferences updated")
         return success_response(NotificationPreferenceSerializer(pref).data)
-
-
-class BroadcastViewSet(viewsets.ModelViewSet):
-    """Admin-only: send a message to a group of users (all / drivers /
-    patients / admins) and list past broadcasts."""
-
-    serializer_class = BroadcastSerializer
-    queryset = Broadcast.objects.all()
-    http_method_names = ["get", "post", "head", "options"]
-    permission_classes = [RBACPermission]
-    ordering_fields = ["created_at"]
-    permission_map = {
-        "list": "manage_users",
-        "retrieve": "manage_users",
-        "create": "manage_users",
-    }
-
-    def perform_create(self, serializer):
-        recipient_count = send_broadcast(
-            title=serializer.validated_data["title"],
-            message=serializer.validated_data["message"],
-            audience=serializer.validated_data["audience"],
-        )
-        serializer.save(sent_by=self.request.user, recipient_count=recipient_count)

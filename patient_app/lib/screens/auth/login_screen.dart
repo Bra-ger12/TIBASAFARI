@@ -1,11 +1,11 @@
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:patient_app/core/config/social_auth_config.dart';
 import 'package:patient_app/core/services/auth_service.dart';
 import 'package:patient_app/core/services/trip_api_service.dart';
 import 'package:patient_app/screens/dashboard/homepage.dart';
 import 'package:patient_app/models/auth_session.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:local_auth/local_auth.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,13 +19,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
-
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: ['email'],
-    serverClientId: SocialAuthConfig.googleServerClientId.isEmpty
-        ? null
-        : SocialAuthConfig.googleServerClientId,
-  );
+  
+  final LocalAuthentication _localAuth = LocalAuthentication();
+  bool _isBiometricSupported = false;
 
   static const Color blue = Color(0xFF2F8FEF);
   static const Color blueDark = Color(0xFF1E63A7);
@@ -39,6 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    _checkBiometricSupport();
     _checkAutoLogin();
   }
 
@@ -47,6 +44,16 @@ class _LoginScreenState extends State<LoginScreen> {
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkBiometricSupport() async {
+    if (kIsWeb) return;
+    try {
+      final isAvailable = await _localAuth.canCheckBiometrics;
+      if (mounted) setState(() => _isBiometricSupported = isAvailable);
+    } catch (_) {
+      // Biometrics not available on this platform
+    }
   }
 
   Future<void> _checkAutoLogin() async {
@@ -60,6 +67,37 @@ class _LoginScreenState extends State<LoginScreen> {
     } else if (session.isLoggedIn && token == null) {
       // Stale offline session with no JWT — clear it so the login form shows
       await AuthSession.clear();
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    try {
+      final isAuthenticated = await _localAuth.authenticate(
+        localizedReason: 'Verify your identity to login',
+        options: const AuthenticationOptions(
+          stickyAuth: true,
+          biometricOnly: true,
+        ),
+      );
+      
+      if (isAuthenticated && mounted) {
+        setState(() => _isLoading = true);
+        await Future.delayed(const Duration(milliseconds: 500));
+        final session = await AuthSession.load();
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => HomeScreen(session: session)),
+          );
+        }
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Biometric failed: $e')),
+        );
+      }
     }
   }
 
@@ -131,90 +169,6 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => HomeScreen(session: session)),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _handleGoogleLogin() async {
-    if (!SocialAuthConfig.googleConfigured) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Google sign-in isn't configured yet.")),
-      );
-      return;
-    }
-    setState(() => _isLoading = true);
-    try {
-      final account = await _googleSignIn.signIn();
-      if (account == null) return; // user cancelled
-      final idToken = (await account.authentication).idToken;
-      if (idToken == null) {
-        throw Exception('Google did not return an identity token.');
-      }
-      final session = await AuthService().loginWithGoogle(idToken: idToken);
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => HomeScreen(session: session)),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _handleAppleLogin() async {
-    setState(() => _isLoading = true);
-    try {
-      final credential = await SignInWithApple.getAppleIDCredential(
-        scopes: [
-          AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName,
-        ],
-        webAuthenticationOptions: SocialAuthConfig.appleWebFlowConfigured
-            ? WebAuthenticationOptions(
-                clientId: SocialAuthConfig.appleServiceId,
-                redirectUri: Uri.parse(SocialAuthConfig.appleRedirectUri),
-              )
-            : null,
-      );
-      final idToken = credential.identityToken;
-      if (idToken == null) {
-        throw Exception('Apple did not return an identity token.');
-      }
-      final nameParts = [credential.givenName, credential.familyName]
-          .whereType<String>()
-          .where((s) => s.isNotEmpty);
-      final fullName = nameParts.isEmpty ? null : nameParts.join(' ');
-      final session = await AuthService().loginWithApple(
-        idToken: idToken,
-        fullName: fullName,
-      );
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => HomeScreen(session: session)),
-        );
-      }
-    } on SignInWithAppleAuthorizationException catch (e) {
-      if (e.code == AuthorizationErrorCode.canceled) return;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Apple sign-in failed: ${e.message}')),
         );
       }
     } catch (e) {
@@ -354,6 +308,23 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     
+                    if (!kIsWeb && _isBiometricSupported) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: border),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          onPressed: _isLoading ? null : _handleBiometricLogin,
+                          icon: Icon(defaultTargetPlatform == TargetPlatform.iOS ? Icons.face : Icons.fingerprint, color: blue),
+                          label: const Text('Login with Biometrics', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ],
+                    
                     const SizedBox(height: 22),
                     const Row(children: [Expanded(child: Divider()), Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text('or')), Expanded(child: Divider())]),
                     const SizedBox(height: 18),
@@ -361,13 +332,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     _socialButton(
                       imagePath: 'assets/images/google_logo.png',
                       text: 'Continue with Google',
-                      onTap: _isLoading ? null : _handleGoogleLogin,
+                      onTap: () {},
                     ),
                     const SizedBox(height: 10),
                     _socialButton(
                       imagePath: 'assets/images/apple_logo.png',
                       text: 'Continue with Apple',
-                      onTap: _isLoading ? null : _handleAppleLogin,
+                      onTap: () {},
                     ),
                     const SizedBox(height: 18),
                     
@@ -407,7 +378,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _socialButton({required String imagePath, required String text, VoidCallback? onTap}) {
+  Widget _socialButton({required String imagePath, required String text, required VoidCallback onTap}) {
     return SizedBox(
       width: double.infinity,
       height: 52,

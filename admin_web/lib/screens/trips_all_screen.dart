@@ -50,9 +50,8 @@ class _TripsAllScreenState extends State<TripsAllScreen> {
             rows = rows
                 .where((t) =>
                     t.reference.toLowerCase().contains(q) ||
-                    t.patientName.toLowerCase().contains(q) ||
-                    t.patientEmail.toLowerCase().contains(q) ||
-                    t.driverName.toLowerCase().contains(q))
+                    (t.patient?.name.toLowerCase().contains(q) ?? false) ||
+                    (t.driver?.name.toLowerCase().contains(q) ?? false))
                 .toList();
           }
           return Column(
@@ -82,18 +81,9 @@ class _TripsAllScreenState extends State<TripsAllScreen> {
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: const Color(0xFF0EA5E9))),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(t.patientName.isEmpty ? '—' : t.patientName,
-                          style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w500)),
-                      if (t.patientEmail.isNotEmpty)
-                        Text(t.patientEmail,
-                            style: const TextStyle(
-                                fontSize: 11, color: AppTheme.textMuted)),
-                    ],
-                  ),
+                  Text(t.patient?.name ?? '—',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w500)),
                   '${t.pickup} → ${t.dropoff}',
                   '${t.distanceKm} km',
                   formatDate(t.startedAt, withTime: true),

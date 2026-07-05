@@ -103,10 +103,10 @@ class _AssignDriverDialogState extends State<AssignDriverDialog> {
                       itemCount: available.length,
                       itemBuilder: (context, i) {
                         final d = available[i];
-                        final sel = _selected == d.userId;
+                        final sel = _selected == d.id;
                         final meta = driverStatus(d.status);
                         return RadioListTile<String>(
-                          value: d.userId,
+                          value: d.id,
                           activeColor: AppTheme.primary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),

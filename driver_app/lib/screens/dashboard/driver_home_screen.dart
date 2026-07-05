@@ -7,7 +7,6 @@ import '../../routes/app_routes.dart';
 import '../../services/auth_storage.dart';
 import '../../services/driver_service.dart';
 import '../../services/location_service.dart';
-import '../../services/notifications_ws_service.dart';
 import '../../services/offline_queue_service.dart';
 import '../profile/driver_documents_screen.dart';
 import '../profile/driver_profile_sub_screens.dart';
@@ -26,13 +25,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
   int _tab = 0;
   bool _loading = false;
   String? _error;
-  StreamSubscription<DriverNotification>? _notifSub;
-  int _refreshGeneration = 0;
-
-  static const _wsBase = String.fromEnvironment(
-    'WS_BASE_URL',
-    defaultValue: 'wss://tibasafari-backend.onrender.com',
-  );
 
   late final AnimationController _entryCtrl;
   late final List<Animation<double>> _entryFades;
@@ -57,49 +49,15 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
     });
     _entryCtrl.forward();
     _refresh();
-    _connectNotifications();
   }
 
   @override
   void dispose() {
     _entryCtrl.dispose();
-    _notifSub?.cancel();
     super.dispose();
   }
 
-  /// Listens for the backend's real-time "New Trip Assigned" push
-  /// (sent by TripService.assign_driver over ws/notifications/) so the
-  /// dashboard's assigned-trip list updates without a manual pull-to-refresh.
-  Future<void> _connectNotifications() async {
-    final token = await AuthStorage.instance.getAccessToken();
-    if (token == null || !mounted) return;
-    NotificationsWsService.instance.connect(token: token, wsBaseUrl: _wsBase);
-    _notifSub =
-        NotificationsWsService.instance.notificationStream.listen((n) async {
-      final tripId = n.metadata['trip_id'];
-      if (tripId != null) await _refresh();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-          n.title.isNotEmpty ? '${n.title}: ${n.message}' : n.message,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        backgroundColor: cTeal,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 4),
-        action: tripId != null
-            ? SnackBarAction(
-                label: 'View',
-                textColor: Colors.white,
-                onPressed: () => setState(() => _tab = 0),
-              )
-            : null,
-      ));
-    });
-  }
-
   Future<void> _refresh() async {
-    final generation = ++_refreshGeneration;
     setState(() {
       _loading = true;
       _error = null;
@@ -107,21 +65,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
     try {
       final updated =
           await DriverService.instance.fetchSession(_session.driverId);
-      // Discard this response if a newer refresh has since started —
-      // otherwise a slower in-flight call can overwrite fresher data
-      // (e.g. the initial load resolving after a notification-triggered
-      // refresh already picked up a newly assigned trip).
-      if (mounted && generation == _refreshGeneration) {
-        setState(() => _session = updated);
-      }
+      if (mounted) setState(() => _session = updated);
     } catch (e) {
-      if (mounted && generation == _refreshGeneration) {
-        setState(() => _error = e.toString());
-      }
+      if (mounted) setState(() => _error = e.toString());
     } finally {
-      if (mounted && generation == _refreshGeneration) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -293,7 +241,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
       ),
     );
     if (ok == true && mounted) {
-      NotificationsWsService.instance.disconnect();
       await DriverService.instance.signOut();
       if (mounted) Navigator.pushReplacementNamed(context, AppRoutes.login);
     }

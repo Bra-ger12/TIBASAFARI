@@ -29,15 +29,10 @@ class _ReportsDriversScreenState extends State<ReportsDriversScreen> {
     return items
         .map((d) => {
               'name': d['user_full_name'] ?? d['user_email'] ?? '',
-              'email': d['user_email'] ?? '',
               'status': (d['is_available'] == true) ? 'online' : 'offline',
               'vehicle': d['vehicle_registration'] ?? '',
               'rating': d['rating'] ?? 0,
               'totalTrips': d['trips_count'] ?? 0,
-              'completedTrips': d['trips_count'] ?? 0,
-              'revenue': 0,
-              'distance': 0,
-              'acceptanceRate': 0,
               'licenseNumber': d['license_number'] ?? '',
               'id': d['id'] ?? '',
             })
@@ -59,7 +54,6 @@ class _ReportsDriversScreenState extends State<ReportsDriversScreen> {
                 drivers
                     .map((d) => {
                           'Name': d['name'],
-                          'Email': d['email'],
                           'Status': d['status'],
                           'Vehicle': d['vehicle'],
                           'Rating': d['rating'],
@@ -94,7 +88,6 @@ class _ReportsDriversScreenState extends State<ReportsDriversScreen> {
                   columns: const [
                     DataColumn(label: Text('#')),
                     DataColumn(label: Text('Driver')),
-                    DataColumn(label: Text('Email')),
                     DataColumn(label: Text('Status')),
                     DataColumn(label: Text('Vehicle')),
                     DataColumn(label: Text('Rating'), numeric: true),
@@ -120,8 +113,6 @@ class _ReportsDriversScreenState extends State<ReportsDriversScreen> {
                             style: const TextStyle(
                                 fontSize: 13, fontWeight: FontWeight.w500)),
                       ])),
-                      DataCell(Text(d['email'] as String,
-                          style: const TextStyle(fontSize: 11))),
                       DataCell(StatusBadge(
                           tone: m.tone, label: m.label, dot: true)),
                       DataCell(Text(d['vehicle'] as String,

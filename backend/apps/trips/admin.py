@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.trips.models import Trip, TripRating
+from apps.trips.models import Trip
 
 
 @admin.register(Trip)
@@ -14,16 +14,4 @@ class TripAdmin(admin.ModelAdmin):
         "destination_address",
     )
     list_select_related = ("patient", "driver")
-
-
-@admin.register(TripRating)
-class TripRatingAdmin(admin.ModelAdmin):
-    list_display = ("id", "trip", "driver", "patient", "score", "created_at")
-    list_filter = ("score", "created_at")
-    search_fields = ("trip__id", "patient__email", "trip__driver__email", "comment")
-    list_select_related = ("trip", "trip__driver", "patient")
-
-    @admin.display(description="Driver")
-    def driver(self, obj):
-        return obj.trip.driver
 

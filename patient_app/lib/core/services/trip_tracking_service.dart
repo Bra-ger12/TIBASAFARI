@@ -19,10 +19,7 @@ class TripTrackingService {
   Stream<Map<String, double>> get locationStream => _locationController.stream;
   Stream<String> get statusStream => _statusController.stream;
 
-  static const _wsBase = String.fromEnvironment(
-    'WS_BASE_URL',
-    defaultValue: 'wss://tibasafari-backend.onrender.com',
-  );
+  static const _wsBase = 'ws://10.0.2.2:8000';
 
   void connect({required String tripId, required String token}) {
     if (_activeTripId == tripId) return;
