@@ -51,5 +51,8 @@ urlpatterns = [
     ),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Serving user uploads straight off Django even outside DEBUG is not ideal
+# at scale, but Render has no separate media host configured yet, so this
+# is what makes uploaded driver documents viewable at all in production.
+# Note: Render's disk is ephemeral — uploads still don't survive a redeploy.
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
