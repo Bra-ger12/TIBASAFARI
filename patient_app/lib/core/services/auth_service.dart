@@ -5,6 +5,18 @@ import 'package:patient_app/core/services/notifications_ws_service.dart';
 import 'package:patient_app/core/services/trip_api_service.dart';
 import 'package:patient_app/models/auth_session.dart';
 
+/// Thrown by [AuthService.loginUser] when the backend rejects login with
+/// `error.code == "email_not_verified"` — lets the login screen offer a
+/// "Verify now" action instead of a plain error message.
+class EmailNotVerifiedException implements Exception {
+  final String email;
+  final String message;
+  EmailNotVerifiedException(this.email, this.message);
+
+  @override
+  String toString() => message;
+}
+
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
@@ -68,6 +80,13 @@ class AuthService {
 
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {
+      final err = body['error'];
+      if (err is Map && err['code'] == 'email_not_verified') {
+        throw EmailNotVerifiedException(
+          email.trim().toLowerCase(),
+          _extractError(body, 'Please verify your email before logging in'),
+        );
+      }
       throw Exception(_extractError(body, 'Login failed'));
     }
     return _sessionFromAuthData(body['data'] as Map<String, dynamic>);
@@ -114,6 +133,10 @@ class AuthService {
 
   Future<AuthSession> _sessionFromAuthData(Map<String, dynamic> data) async {
     await TripApiService.instance.saveToken(data['access'] as String);
+    final refresh = data['refresh'] as String?;
+    if (refresh != null) {
+      await TripApiService.instance.saveRefreshToken(refresh);
+    }
 
     final user = data['user'] as Map<String, dynamic>;
     final fullName = user['full_name'] as String? ?? '';
@@ -150,7 +173,10 @@ class AuthService {
     }
   }
 
-  Future<AuthSession> registerPatient({
+  /// Creates the account and sends a verification code — the account has
+  /// no usable session until [verifyEmail] succeeds, so no tokens are
+  /// returned here; the caller should navigate to the verify-email screen.
+  Future<void> registerPatient({
     required String fullName,
     required String email,
     required String phone,
@@ -185,30 +211,62 @@ class AuthService {
     if (resp.statusCode != 201) {
       throw Exception(_extractError(body, 'Registration failed'));
     }
+  }
 
-    final data = body['data'] as Map<String, dynamic>;
-    await TripApiService.instance.saveToken(data['access'] as String);
-
-    final user = data['user'] as Map<String, dynamic>;
-    final resolvedFullName = user['full_name'] as String? ?? fullName;
-    final session = AuthSession(
-      userId: (user['id'] ?? '').toString(),
-      displayName: resolvedFullName.split(' ').first,
-      fullName: resolvedFullName,
-      phone: phone,
-      email: user['email'] as String? ?? email,
-      emergencyContactName: emergencyContactName,
-      emergencyContactPhone: emergencyContactPhone,
-      totalTrips: 0,
-      tripsThisMonth: 0,
-      timeSaved: '0 hr',
-      upcomingTrips: const [],
-      recentTrips: const [],
-      unreadNotifications: 0,
-      isLoggedIn: true,
+  Future<void> verifyEmail({required String email, required String code}) async {
+    final resp = await http.post(
+      Uri.parse('$_base/auth/verify-email/'),
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: jsonEncode({'email': email.trim().toLowerCase(), 'code': code.trim()}),
     );
-    await AuthSession.save(session);
-    return session;
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    if (resp.statusCode != 200) {
+      throw Exception(_extractError(body, 'Verification failed'));
+    }
+  }
+
+  Future<void> resendVerification({required String email}) async {
+    final resp = await http.post(
+      Uri.parse('$_base/auth/resend-verification/'),
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: jsonEncode({'email': email.trim().toLowerCase()}),
+    );
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    if (resp.statusCode != 200) {
+      throw Exception(_extractError(body, 'Could not resend code'));
+    }
+  }
+
+  Future<void> requestPasswordReset({required String email}) async {
+    final resp = await http.post(
+      Uri.parse('$_base/auth/password-reset/'),
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: jsonEncode({'email': email.trim().toLowerCase()}),
+    );
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    if (resp.statusCode != 200) {
+      throw Exception(_extractError(body, 'Could not request password reset'));
+    }
+  }
+
+  Future<void> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    final resp = await http.post(
+      Uri.parse('$_base/auth/password-reset/confirm/'),
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: jsonEncode({
+        'email': email.trim().toLowerCase(),
+        'code': code.trim(),
+        'new_password': newPassword,
+      }),
+    );
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    if (resp.statusCode != 200) {
+      throw Exception(_extractError(body, 'Password reset failed'));
+    }
   }
 
   Future<void> logout() async {

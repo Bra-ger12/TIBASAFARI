@@ -63,53 +63,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _showForgotPasswordDialog() {
-    final TextEditingController forgotEmailController = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reset Password'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Enter your email address to receive a password reset link.'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: forgotEmailController,
-              decoration: const InputDecoration(
-                hintText: 'Email address',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (forgotEmailController.text.isNotEmpty) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Password reset link sent to ${forgotEmailController.text}'),
-                    backgroundColor: const Color(0xFF1D9E75),
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1D9E75),
-            ),
-            child: const Text('Send Reset Link'),
-          ),
-        ],
-      ),
-    );
+  void _goToForgotPassword() {
+    Navigator.pushNamed(context, '/reset-password');
   }
 
   Future<void> _handleLogin() async {
@@ -131,6 +86,18 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => HomeScreen(session: session)),
+        );
+      }
+    } on EmailNotVerifiedException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            action: SnackBarAction(
+              label: 'Verify now',
+              onPressed: () => Navigator.pushNamed(context, '/verify-email', arguments: e.email),
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -337,7 +304,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: _showForgotPasswordDialog,
+                        onPressed: _goToForgotPassword,
                         child: const Text('Forgot password?', style: TextStyle(color: blueDark, fontSize: 13, fontWeight: FontWeight.w600)),
                       ),
                     ),

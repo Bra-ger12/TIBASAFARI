@@ -2,11 +2,13 @@ from rest_framework import exceptions, filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.accounts.models import EmailOTP
 from apps.accounts.serializers import UserSerializer
+from apps.accounts.services import EmailOTPService
 from apps.accounts.social_auth import verify_apple_id_token, verify_google_id_token
 from apps.core.responses import success_response
+from apps.core.throttles import EmailOTPRequestThrottle
 from apps.patients.models import PatientProfile
 from apps.patients.serializers import (
     AppleAuthSerializer,
@@ -24,18 +26,23 @@ from apps.trips.services import TripService
 class PatientSignupView(APIView):
     permission_classes = [AllowAny]
     serializer_class = PatientSignupSerializer
+    throttle_classes = [EmailOTPRequestThrottle]
+    throttle_scope = "email_otp"
+    otp_service = EmailOTPService()
 
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        refresh = RefreshToken.for_user(user)
-        data = {
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-            "user": UserSerializer(user).data,
-        }
-        return success_response(data, "Patient account created", status=status.HTTP_201_CREATED)
+        code = self.otp_service.generate(user, purpose=EmailOTP.Purpose.VERIFY_EMAIL)
+        self.otp_service.send_verification_email(user, code)
+        # No tokens: the account can't be used until the code is verified,
+        # so the client moves straight to the "verify your email" screen.
+        data = {"email": user.email}
+        return success_response(
+            data, "Account created — check your email for a verification code",
+            status=status.HTTP_201_CREATED,
+        )
 
 
 def _social_login_response(user, message: str):

@@ -1,0 +1,9 @@
+Tiba Safari — Verify your email
+
+Hi {{ full_name }},
+
+Enter this code in the TibaSafari app to verify your email address:
+
+    {{ code }}
+
+This code expires in {{ ttl_minutes }} minutes. If you didn't request this, you can safely ignore this email.

@@ -223,6 +223,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": env("ANON_THROTTLE_RATE", default="100/hour"),
         "user": env("USER_THROTTLE_RATE", default="1000/hour"),
+        "email_otp": env("EMAIL_OTP_THROTTLE_RATE", default="5/hour"),
     },
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",

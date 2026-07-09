@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:patient_app/core/services/auth_service.dart';
 import 'package:patient_app/core/theme/app_theme.dart';
-import 'package:patient_app/models/auth_session.dart';
-import 'package:patient_app/screens/dashboard/homepage.dart';
 
 class PatientRegisterScreen extends StatefulWidget {
   const PatientRegisterScreen({super.key});
@@ -84,11 +82,11 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
     }
 
     setState(() => _loading = true);
-    AuthSession? session;
+    final email = _emailController.text.trim();
     try {
-      session = await AuthService().registerPatient(
+      await AuthService().registerPatient(
         fullName: _nameController.text.trim(),
-        email: _emailController.text.trim(),
+        email: email,
         phone: _phoneController.text.trim(),
         password: _passwordController.text,
         confirmPassword: _confirmPasswordController.text,
@@ -107,57 +105,7 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
 
     if (!mounted) return;
     setState(() => _loading = false);
-    _showSuccessDialog(session);
-  }
-
-  void _showSuccessDialog(AuthSession session) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(color: AppColors.primaryExtraLight, shape: BoxShape.circle),
-              child: const Icon(Icons.check, color: AppColors.primary),
-            ),
-            const SizedBox(width: 10),
-            Text('Account Created', style: AppFonts.sora(fontSize: 18, fontWeight: FontWeight.w800)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Welcome to Tiba Safari. Your account was created successfully.'),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primaryExtraLight,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text('Email: ${session.email}', style: const TextStyle(fontSize: 12)),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => HomeScreen(session: session)),
-                (route) => false,
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            child: const Text('Get Started', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+    Navigator.of(context).pushNamedAndRemoveUntil('/verify-email', (route) => false, arguments: email);
   }
 
   String? _validatePassword(String? value) {

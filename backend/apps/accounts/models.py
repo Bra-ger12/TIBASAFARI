@@ -1,7 +1,9 @@
 import uuid
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 
 from apps.accounts.managers import UserManager
 
@@ -23,6 +25,10 @@ class User(AbstractUser):
         choices=Status.choices,
         default=Status.PENDING,
     )
+    # Defaults True so every existing account, plus every non-self-service
+    # creation path (admin signup, driver signup, Google/Apple social
+    # sign-in), is unaffected. Only PatientSignupSerializer sets this False.
+    is_email_verified = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -46,3 +52,34 @@ class User(AbstractUser):
     @property
     def is_approved(self) -> bool:
         return self.is_active and self.status == self.Status.ACTIVE
+
+
+class EmailOTP(models.Model):
+    """Short-lived 6-digit codes emailed to patients for self-service email
+    verification and password reset — chosen over a clickable link since
+    patient_app is mobile-only (no web page to land on, and setting up
+    Universal Links / App Links for a deep link is unnecessary complexity)."""
+
+    class Purpose(models.TextChoices):
+        VERIFY_EMAIL = "VERIFY_EMAIL", "Verify Email"
+        PASSWORD_RESET = "PASSWORD_RESET", "Password Reset"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, related_name="otp_codes", on_delete=models.CASCADE
+    )
+    purpose = models.CharField(max_length=20, choices=Purpose.choices)
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"EmailOTP({self.user_id}, {self.purpose})"
+
+    @property
+    def is_valid(self) -> bool:
+        return self.consumed_at is None and timezone.now() < self.expires_at

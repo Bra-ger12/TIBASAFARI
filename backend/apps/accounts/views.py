@@ -1,13 +1,10 @@
 from drf_spectacular.utils import extend_schema
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.encoding import force_str
-from django.utils.http import urlsafe_base64_decode
 from rest_framework import exceptions, status, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import User
+from apps.accounts.models import EmailOTP, User
 from apps.accounts.serializers import (
     AdminSignupSerializer,
     ChangePasswordSerializer,
@@ -15,11 +12,14 @@ from apps.accounts.serializers import (
     LogoutSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    ResendVerificationSerializer,
     TokenResponseSerializer,
     UserSerializer,
+    VerifyEmailSerializer,
 )
-from apps.accounts.services import AuthService, UserService
+from apps.accounts.services import AuthService, EmailOTPService, UserService
 from apps.core.responses import success_response
+from apps.core.throttles import EmailOTPRequestThrottle
 from apps.rbac.permissions import HasPermission
 
 
@@ -75,34 +75,89 @@ class ChangePasswordView(APIView):
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
     serializer_class = PasswordResetRequestSerializer
+    throttle_classes = [EmailOTPRequestThrottle]
+    throttle_scope = "email_otp"
+    otp_service = EmailOTPService()
 
     @extend_schema(request=PasswordResetRequestSerializer)
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # Hook email delivery here. The response is intentionally generic.
+        user = User.objects.filter(email__iexact=serializer.validated_data["email"]).first()
+        if user is not None:
+            code = self.otp_service.generate(user, purpose=EmailOTP.Purpose.PASSWORD_RESET)
+            self.otp_service.send_password_reset_email(user, code)
+        # Response is intentionally identical either way to avoid leaking
+        # whether the email is registered.
         return success_response(message="Password reset instructions sent if the email exists")
 
 
 class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
     serializer_class = PasswordResetConfirmSerializer
+    otp_service = EmailOTPService()
 
     @extend_schema(request=PasswordResetConfirmSerializer)
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
         try:
-            uid = force_str(urlsafe_base64_decode(serializer.validated_data["uid"]))
-            user = User.objects.get(pk=uid)
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist) as exc:
-            raise exceptions.ValidationError("Invalid reset token") from exc
-        token = serializer.validated_data["token"]
-        if not default_token_generator.check_token(user, token):
-            raise exceptions.ValidationError("Invalid or expired reset token")
-        user.set_password(serializer.validated_data["new_password"])
+            user = User.objects.get(email__iexact=data["email"])
+        except User.DoesNotExist as exc:
+            raise exceptions.ValidationError("Invalid or expired code") from exc
+        if not self.otp_service.verify(
+            user, purpose=EmailOTP.Purpose.PASSWORD_RESET, code=data["code"]
+        ):
+            raise exceptions.ValidationError("Invalid or expired code")
+        user.set_password(data["new_password"])
         user.save(update_fields=["password"])
         return success_response(message="Password reset successfully")
+
+
+class VerifyEmailView(APIView):
+    permission_classes = [AllowAny]
+    serializer_class = VerifyEmailSerializer
+    otp_service = EmailOTPService()
+
+    @extend_schema(request=VerifyEmailSerializer)
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            user = User.objects.get(email__iexact=data["email"])
+        except User.DoesNotExist as exc:
+            raise exceptions.ValidationError("Invalid or expired code") from exc
+        if not self.otp_service.verify(
+            user, purpose=EmailOTP.Purpose.VERIFY_EMAIL, code=data["code"]
+        ):
+            raise exceptions.ValidationError("Invalid or expired code")
+        user.is_email_verified = True
+        user.save(update_fields=["is_email_verified"])
+        return success_response(message="Email verified — you can now sign in")
+
+
+class ResendVerificationView(APIView):
+    permission_classes = [AllowAny]
+    serializer_class = ResendVerificationSerializer
+    throttle_classes = [EmailOTPRequestThrottle]
+    throttle_scope = "email_otp"
+    otp_service = EmailOTPService()
+
+    @extend_schema(request=ResendVerificationSerializer)
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = User.objects.filter(
+            email__iexact=serializer.validated_data["email"], is_email_verified=False
+        ).first()
+        if user is not None:
+            code = self.otp_service.generate(user, purpose=EmailOTP.Purpose.VERIFY_EMAIL)
+            self.otp_service.send_verification_email(user, code)
+        # Same generic response whether the email exists, is already
+        # verified, or genuinely got a new code — avoids account enumeration.
+        return success_response(message="A new code has been sent if the email needs verification")
 
 
 class ProfileView(APIView):
