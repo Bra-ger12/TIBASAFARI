@@ -54,6 +54,12 @@ services:
       # provider (backend rejects Apple tokens with a clear error).
       - key: APPLE_SIGN_IN_CLIENT_IDS
         sync: false
+      # Google OAuth client ID(s) for patient_app's "Continue with Google"
+      # login — the Web application client from Google Cloud Console. Not
+      # a secret (it's the public `aud` in every Google sign-in token), so
+      # committed directly rather than left for the Render dashboard.
+      - key: GOOGLE_OAUTH_CLIENT_IDS
+        value: "1029093901039-bljbf5po2so301ctjvaj62p7knsbjfrn.apps.googleusercontent.com"
 
   - type: redis
     name: tibasafari-redis
