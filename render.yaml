@@ -47,6 +47,13 @@ services:
         value: "14"
       - key: EMAIL_BACKEND
         value: "django.core.mail.backends.console.EmailBackend"
+      # Comma-separated Apple Sign In client IDs (App ID / Services ID) for
+      # patient_app's "Continue with Apple" login. Set the real value in the
+      # Render dashboard once registered in the Apple Developer portal —
+      # left unset here so it isn't committed. Empty/unset disables the
+      # provider (backend rejects Apple tokens with a clear error).
+      - key: APPLE_SIGN_IN_CLIENT_IDS
+        sync: false
 
   - type: redis
     name: tibasafari-redis
