@@ -2,9 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:patient_app/core/models/trip_message.dart';
 
 const _storage = FlutterSecureStorage();
 const String _kToken = 'patient_access_token';
+const String _kRefreshToken = 'patient_refresh_token';
 
 /// REST client for all patient-facing API calls.
 class TripApiService {
@@ -23,9 +25,52 @@ class TripApiService {
   Future<void> saveToken(String token) =>
       _storage.write(key: _kToken, value: token);
 
+  Future<void> saveRefreshToken(String token) =>
+      _storage.write(key: _kRefreshToken, value: token);
+
   Future<String?> getToken() => _storage.read(key: _kToken);
 
-  Future<void> clearToken() => _storage.delete(key: _kToken);
+  Future<String?> getRefreshToken() => _storage.read(key: _kRefreshToken);
+
+  Future<void> clearToken() => Future.wait([
+        _storage.delete(key: _kToken),
+        _storage.delete(key: _kRefreshToken),
+      ]);
+
+  /// Exchanges the stored refresh token for a new access token (the backend
+  /// rotates refresh tokens too, so the new one must be saved each time).
+  /// Returns false if there's no refresh token or it's itself expired/invalid
+  /// — callers should treat that as "session expired, log in again".
+  Future<bool> _refreshAccessToken() async {
+    final refresh = await getRefreshToken();
+    if (refresh == null) return false;
+    try {
+      final resp = await http.post(
+        Uri.parse('$_base/auth/refresh/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'refresh': refresh}),
+      );
+      if (resp.statusCode != 200) {
+        await clearToken();
+        return false;
+      }
+      final decoded = jsonDecode(resp.body) as Map<String, dynamic>;
+      final newAccess = decoded['access'] as String?;
+      if (newAccess == null) {
+        await clearToken();
+        return false;
+      }
+      await saveToken(newAccess);
+      final newRefresh = decoded['refresh'] as String?;
+      if (newRefresh != null) await saveRefreshToken(newRefresh);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   // ── Patient profile ───────────────────────────────────────────────────────
 
@@ -91,10 +136,10 @@ class TripApiService {
       'num_attendants': numAttendants,
       'special_requirements': specialRequirements,
       'notes': notes,
-      if (pickupLat != null) 'pickup_latitude': pickupLat,
-      if (pickupLng != null) 'pickup_longitude': pickupLng,
-      if (destLat != null) 'destination_latitude': destLat,
-      if (destLng != null) 'destination_longitude': destLng,
+      if (pickupLat != null) 'pickup_latitude': _roundCoord(pickupLat),
+      if (pickupLng != null) 'pickup_longitude': _roundCoord(pickupLng),
+      if (destLat != null) 'destination_latitude': _roundCoord(destLat),
+      if (destLng != null) 'destination_longitude': _roundCoord(destLng),
       if (estimatedFare != null) 'estimated_fare': estimatedFare,
       if (estimatedFareBreakdown != null)
         'estimated_fare_breakdown': estimatedFareBreakdown,
@@ -127,13 +172,19 @@ class TripApiService {
       'days_of_week': daysOfWeek,
       'special_requirements': specialRequirements,
       if (endDate != null) 'end_date': endDate,
-      if (pickupLat != null) 'pickup_latitude': pickupLat,
-      if (pickupLng != null) 'pickup_longitude': pickupLng,
-      if (destLat != null) 'destination_latitude': destLat,
-      if (destLng != null) 'destination_longitude': destLng,
+      if (pickupLat != null) 'pickup_latitude': _roundCoord(pickupLat),
+      if (pickupLng != null) 'pickup_longitude': _roundCoord(pickupLng),
+      if (destLat != null) 'destination_latitude': _roundCoord(destLat),
+      if (destLng != null) 'destination_longitude': _roundCoord(destLng),
     };
     return _post('/trips/recurring/', body);
   }
+
+  /// The backend stores coordinates as DecimalField(decimal_places=6);
+  /// GPS readings commonly carry 15+ digits of double precision, which
+  /// DRF rejects outright rather than truncating.
+  double _roundCoord(double value) =>
+      double.parse(value.toStringAsFixed(6));
 
   /// Returns raw trip objects from the backend (all statuses).
   Future<List<dynamic>> getMyTrips() async {
@@ -150,6 +201,22 @@ class TripApiService {
 
   Future<Map<String, dynamic>> cancelTrip(String tripId) =>
       _post('/patients/trip-requests/$tripId/cancel/', {});
+
+  Future<List<TripChatMessage>> fetchTripMessages(String tripId) async {
+    final resp = await _get('/trips/$tripId/messages/');
+    return _extractList(resp)
+        .map((m) => TripChatMessage.fromJson(m as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<TripChatMessage> sendTripMessage({
+    required String tripId,
+    required String body,
+  }) async {
+    final resp = await _post('/trips/$tripId/messages/', {'body': body});
+    return TripChatMessage.fromJson(
+        (resp['data'] as Map<String, dynamic>?) ?? {});
+  }
 
   Future<void> rateTrip(String tripId, int score, String comment) =>
       _post('/trips/$tripId/rate/', {'score': score, 'comment': comment});
@@ -201,32 +268,6 @@ class TripApiService {
     });
     return (resp['data'] as Map<String, dynamic>?) ?? {};
   }
-
-  // ── Payment methods (display-only, no real gateway) ──────────────────────
-
-  Future<List<dynamic>> getPaymentMethods() async {
-    final resp = await _get('/billing/payment-methods/');
-    return _extractList(resp);
-  }
-
-  /// [identifier] is the raw phone/card number — only a masked label is
-  /// ever persisted server-side.
-  Future<Map<String, dynamic>> addPaymentMethod({
-    required String methodType,
-    required String identifier,
-  }) async {
-    final resp = await _post('/billing/payment-methods/', {
-      'method_type': methodType,
-      'identifier': identifier,
-    });
-    return (resp['data'] as Map<String, dynamic>?) ?? {};
-  }
-
-  Future<void> deletePaymentMethod(String id) =>
-      _delete('/billing/payment-methods/$id/');
-
-  Future<void> setDefaultPaymentMethod(String id) =>
-      _post('/billing/payment-methods/$id/set-default/', {});
 
   // ── Notification preferences ──────────────────────────────────────────────
 
@@ -347,57 +388,63 @@ class TripApiService {
   // ── HTTP helpers ──────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> _post(
-      String path, Map<String, dynamic> body) async {
-    final token = await getToken();
-    final resp = await http.post(
-      Uri.parse('$_base$path'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode(body),
-    );
-    return _parse(resp);
-  }
+          String path, Map<String, dynamic> body) async =>
+      _parse(await _send('POST', path, body: body));
 
-  Future<Map<String, dynamic>> _get(String path) async {
-    final token = await getToken();
-    final resp = await http.get(
-      Uri.parse('$_base$path'),
-      headers: {
-        'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
-    );
-    return _parse(resp);
-  }
+  Future<Map<String, dynamic>> _get(String path) async =>
+      _parse(await _send('GET', path));
 
   Future<Map<String, dynamic>> _patch(
-      String path, Map<String, dynamic> body) async {
-    final token = await getToken();
-    final resp = await http.patch(
-      Uri.parse('$_base$path'),
-      headers: {
-        'Content-Type': 'application/json',
+          String path, Map<String, dynamic> body) async =>
+      _parse(await _send('PATCH', path, body: body));
+
+  Future<http.Response> _send(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+  }) {
+    final uri = Uri.parse('$_base$path');
+    return sendWithAuth((token) {
+      final headers = {
         'Accept': 'application/json',
+        if (body != null) 'Content-Type': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode(body),
-    );
-    return _parse(resp);
+      };
+      final encodedBody = body != null ? jsonEncode(body) : null;
+      switch (method) {
+        case 'GET':
+          return http.get(uri, headers: headers);
+        case 'POST':
+          return http.post(uri, headers: headers, body: encodedBody);
+        case 'PATCH':
+          return http.patch(uri, headers: headers, body: encodedBody);
+        case 'DELETE':
+          return http.delete(uri, headers: headers);
+        default:
+          throw UnsupportedError('Unsupported method: $method');
+      }
+    });
   }
 
-  Future<Map<String, dynamic>> _delete(String path) async {
-    final token = await getToken();
-    final resp = await http.delete(
-      Uri.parse('$_base$path'),
-      headers: {
-        'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
-    );
-    return _parse(resp);
+  /// Shared by other services (fare/facility) that build their own
+  /// request/URI but still need the same 401-refresh-and-retry behavior:
+  /// sends with whatever access token is currently stored, and on a 401
+  /// (expired/invalid access token) silently refreshes and retries once
+  /// before giving up, so a lapsed hour-long session doesn't interrupt the
+  /// user. If the refresh token itself is gone/invalid, fails with a clean
+  /// message instead of leaking the raw backend/JWT error payload.
+  Future<http.Response> sendWithAuth(
+    Future<http.Response> Function(String? token) attempt,
+  ) async {
+    var resp = await attempt(await getToken());
+    if (resp.statusCode == 401) {
+      if (await _refreshAccessToken()) {
+        resp = await attempt(await getToken());
+      } else {
+        throw Exception('Your session has expired. Please sign in again.');
+      }
+    }
+    return resp;
   }
 
   Map<String, dynamic> _parse(http.Response resp) {

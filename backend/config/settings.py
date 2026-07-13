@@ -36,10 +36,11 @@ CORS_ALLOW_ALL_ORIGINS = env.bool(
     default=DEBUG and not CORS_ALLOWED_ORIGINS,
 )
 
-# Social sign-in (patient_app). These are OAuth *client IDs* — public
-# audience identifiers, not secrets — used to validate the `aud` claim on
-# Google/Apple identity tokens. Leave a provider's list empty to disable it
-# (the corresponding /patients/auth/*/ endpoint returns 400 until set).
+# Social sign-in (patient_app and driver_app). These are OAuth *client IDs*
+# — public audience identifiers, not secrets — used to validate the `aud`
+# claim on Google/Apple identity tokens. Leave a provider's list empty to
+# disable it (the corresponding /patients|drivers/auth/*/ endpoint returns
+# 400 until set).
 GOOGLE_OAUTH_CLIENT_IDS = env.list("GOOGLE_OAUTH_CLIENT_IDS", default=[])
 APPLE_SIGN_IN_CLIENT_IDS = env.list("APPLE_SIGN_IN_CLIENT_IDS", default=[])
 

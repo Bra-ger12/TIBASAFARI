@@ -131,6 +131,7 @@ class Vehicle {
   final int year;
   final String type;
   final int capacity;
+  final bool hasWheelchairAccess;
   final String status;
   final Driver? driver;
 
@@ -142,6 +143,7 @@ class Vehicle {
     required this.year,
     required this.type,
     required this.capacity,
+    this.hasWheelchairAccess = false,
     required this.status,
     this.driver,
   });
@@ -154,8 +156,11 @@ class Vehicle {
         model: j['model'] as String? ?? '',
         make: j['make'] as String? ?? '',
         year: (j['year'] as num?)?.toInt() ?? 0,
-        type: j['type'] as String? ?? j['vehicle_type'] as String? ?? 'ambulance',
+        type: (j['has_wheelchair_access'] as bool? ?? false)
+            ? 'wheelchair-van'
+            : (j['type'] as String? ?? j['vehicle_type'] as String? ?? 'ambulance'),
         capacity: (j['capacity'] as num?)?.toInt() ?? 4,
+        hasWheelchairAccess: j['has_wheelchair_access'] as bool? ?? false,
         status: j['status'] as String? ?? 'available',
         driver: j['driver'] is Map<String, dynamic>
             ? Driver.fromJson(j['driver'] as Map<String, dynamic>)

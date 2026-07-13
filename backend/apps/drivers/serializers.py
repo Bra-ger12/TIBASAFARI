@@ -156,6 +156,8 @@ class DriverLocationSerializer(serializers.Serializer):
 
 class AssignedTripSerializer(serializers.ModelSerializer):
     patient_email = serializers.EmailField(source="patient.email", read_only=True)
+    patient_name = serializers.CharField(source="patient.full_name", read_only=True)
+    patient_phone = serializers.CharField(source="patient.phone", read_only=True)
 
     class Meta:
         model = Trip
@@ -163,6 +165,8 @@ class AssignedTripSerializer(serializers.ModelSerializer):
             "id",
             "patient",
             "patient_email",
+            "patient_name",
+            "patient_phone",
             "pickup_address",
             "destination_address",
             "scheduled_at",
@@ -177,6 +181,10 @@ class AssignedTripSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
+
+class GoogleAuthSerializer(serializers.Serializer):
+    id_token = serializers.CharField(write_only=True)
 
 
 class DriverSignupSerializer(serializers.Serializer):

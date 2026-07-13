@@ -1,7 +1,7 @@
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -62,5 +62,15 @@ urlpatterns = [
 # Serving user uploads straight off Django even outside DEBUG is not ideal
 # at scale, but Render has no separate media host configured yet, so this
 # is what makes uploaded driver documents viewable at all in production.
+# django.conf.urls.static.static() silently no-ops unless DEBUG=True, so a
+# prior attempt at this (using that helper) never actually registered the
+# route in production — every /media/ URL 404'd. Wiring django.views.static
+# .serve directly here bypasses that DEBUG check.
 # Note: Render's disk is ephemeral — uploads still don't survive a redeploy.
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+urlpatterns += [
+    re_path(
+        r"^%s(?P<path>.*)$" % settings.MEDIA_URL.lstrip("/"),
+        serve,
+        {"document_root": settings.MEDIA_ROOT},
+    ),
+]

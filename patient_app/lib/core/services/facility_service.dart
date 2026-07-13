@@ -44,13 +44,14 @@ class FacilityService {
   }
 
   Future<List<Facility>> _fetch(Uri uri) async {
-    final token = await TripApiService.instance.getToken();
-    final resp = await http.get(
-      uri,
-      headers: {
-        'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
+    final resp = await TripApiService.instance.sendWithAuth(
+      (token) => http.get(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ),
     );
 
     final body = jsonDecode(resp.body) as Map<String, dynamic>;

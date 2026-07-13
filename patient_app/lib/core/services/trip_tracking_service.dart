@@ -3,8 +3,11 @@ import 'dart:convert';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../models/trip_message.dart';
+
 /// Patient-side trip tracking: subscribes to a trip room and receives
-/// real-time driver location updates and trip status changes.
+/// real-time driver location updates, trip status changes and chat
+/// messages.
 class TripTrackingService {
   TripTrackingService._();
   static final instance = TripTrackingService._();
@@ -15,9 +18,11 @@ class TripTrackingService {
   final _locationController =
       StreamController<Map<String, double>>.broadcast();
   final _statusController = StreamController<String>.broadcast();
+  final _chatController = StreamController<TripChatMessage>.broadcast();
 
   Stream<Map<String, double>> get locationStream => _locationController.stream;
   Stream<String> get statusStream => _statusController.stream;
+  Stream<TripChatMessage> get chatStream => _chatController.stream;
 
   static const _wsBase = String.fromEnvironment(
     'WS_BASE_URL',
@@ -54,6 +59,8 @@ class TripTrackingService {
           });
         case 'status':
           _statusController.add(data['status'] as String);
+        case 'chat':
+          _chatController.add(TripChatMessage.fromJson(data));
       }
     } catch (_) {}
   }
@@ -62,5 +69,6 @@ class TripTrackingService {
     disconnect();
     _locationController.close();
     _statusController.close();
+    _chatController.close();
   }
 }

@@ -52,42 +52,52 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
 
     setState(() => _isSubmitting = true);
     try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
       await DriverService.instance.signupDriver(
         fullName: _fullNameController.text,
         phoneNumber: '+255 ${_phoneController.text.trim()}',
-        email: _emailController.text,
+        email: email,
         licenseNumber: _licenseController.text,
-        password: _passwordController.text,
+        password: password,
         confirmPassword: _confirmPasswordController.text,
       );
 
       if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Driver account created'),
-          content: const Text(
-            'Your driver account is ready. Use your email and password to sign in.',
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  AppRoutes.login,
-                  (route) => false,
-                );
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: cTeal),
-              child: const Text(
-                'Sign in',
-                style: TextStyle(color: Colors.white),
-              ),
+      try {
+        // Signup activates the account immediately (no approval gate), so
+        // sign the driver straight in rather than sending them back to the
+        // login screen to re-enter the password they just chose.
+        final session = await DriverService.instance.login(
+          email: email,
+          password: password,
+        );
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.driverHome,
+          (route) => false,
+          arguments: session,
+        );
+      } catch (_) {
+        // Account was created fine; only the automatic sign-in failed
+        // (e.g. a transient network hiccup) — fall back to manual login.
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Account created. Please sign in with your new password.',
             ),
-          ],
-        ),
-      );
+            backgroundColor: cTeal,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.login,
+          (route) => false,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

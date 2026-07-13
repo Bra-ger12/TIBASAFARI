@@ -18,6 +18,8 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _plate = TextEditingController();
   final _model = TextEditingController();
+  final _make = TextEditingController();
+  final _year = TextEditingController(text: DateTime.now().year.toString());
   final _capacity = TextEditingController(text: '4');
   String _type = 'ambulance';
   String _status = 'available';
@@ -40,6 +42,8 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
       _editId = v.id;
       _plate.text = v.plate;
       _model.text = v.model;
+      _make.text = v.make;
+      _year.text = v.year == 0 ? _year.text : v.year.toString();
       _capacity.text = v.capacity.toString();
       _type = v.type;
       _status = v.status;
@@ -59,8 +63,10 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
       final payload = {
         'registration_number': _plate.text,
         'model': _model.text,
-        'type': _type,
+        'make': _make.text,
+        'year': int.tryParse(_year.text) ?? DateTime.now().year,
         'capacity': int.tryParse(_capacity.text) ?? 4,
+        'has_wheelchair_access': _type == 'wheelchair-van',
         'status': _status,
       };
       if (widget.isEdit && _editId != null) {
@@ -90,6 +96,8 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
   void dispose() {
     _plate.dispose();
     _model.dispose();
+    _make.dispose();
+    _year.dispose();
     _capacity.dispose();
     super.dispose();
   }
@@ -139,6 +147,25 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
                               const InputDecoration(labelText: 'Model *'),
                           validator: (v) =>
                               v == null || v.isEmpty ? 'Required' : null,
+                        ),
+                        TextFormField(
+                          controller: _make,
+                          decoration:
+                              const InputDecoration(labelText: 'Make *'),
+                          validator: (v) =>
+                              v == null || v.isEmpty ? 'Required' : null,
+                        ),
+                        TextFormField(
+                          controller: _year,
+                          decoration:
+                              const InputDecoration(labelText: 'Year *'),
+                          keyboardType: TextInputType.number,
+                          validator: (v) {
+                            final year = int.tryParse(v ?? '');
+                            if (year == null) return 'Required';
+                            if (year < 1990) return 'Year is too old';
+                            return null;
+                          },
                         ),
                       ],
                     );

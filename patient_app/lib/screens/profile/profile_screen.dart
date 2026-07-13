@@ -205,7 +205,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           _menuItem(icon: Icons.person_outline_rounded, title: 'Personal Information', onTap: () => _navigate(const PersonalInfoScreen())),
           _menuItem(icon: Icons.medical_information_outlined, title: 'Medical Profile', badge: 'Setup Required', badgeColor: cAmber, onTap: () => _navigate(const MedicalProfileScreen())),
           _menuItem(icon: Icons.contact_phone_outlined, title: 'Emergency Contacts', onTap: () => _navigate(const EmergencyContactsScreen())),
-          _menuItem(icon: Icons.payment_outlined, title: 'Payment Methods', badge: 'M-Pesa', badgeColor: cTeal, onTap: () => _navigate(const PaymentMethodsScreen())),
         ]),
         const SizedBox(height: 16),
         _menuGroup(items: [
@@ -223,7 +222,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _menuItem({required IconData icon, required String title, String? badge, Color? badgeColor, required VoidCallback onTap}) {
-    final isLast = title == 'About Tiba Safari' || title == 'Payment Methods' && badge != null;
     return Material(color: Colors.transparent, child: InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),

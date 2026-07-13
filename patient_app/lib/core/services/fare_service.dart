@@ -24,24 +24,25 @@ class FareService {
     int waitingMinutes = 0,
     DateTime? scheduledAt,
   }) async {
-    final token = await TripApiService.instance.getToken();
-    final resp = await http.post(
-      Uri.parse('$_base/trips/estimate-fare/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'pickup_latitude': pickupLat,
-        'pickup_longitude': pickupLng,
-        'destination_latitude': destLat,
-        'destination_longitude': destLng,
-        'service_type': serviceType,
-        'waiting_minutes': waitingMinutes,
-        if (scheduledAt != null)
-          'scheduled_at': scheduledAt.toUtc().toIso8601String(),
-      }),
+    final resp = await TripApiService.instance.sendWithAuth(
+      (token) => http.post(
+        Uri.parse('$_base/trips/estimate-fare/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'pickup_latitude': _roundCoord(pickupLat),
+          'pickup_longitude': _roundCoord(pickupLng),
+          'destination_latitude': _roundCoord(destLat),
+          'destination_longitude': _roundCoord(destLng),
+          'service_type': serviceType,
+          'waiting_minutes': waitingMinutes,
+          if (scheduledAt != null)
+            'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+        }),
+      ),
     );
 
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -50,6 +51,11 @@ class FareService {
     }
     return FareBreakdown.fromJson(body['data'] as Map<String, dynamic>);
   }
+
+  /// The backend validates coordinates as DecimalField(decimal_places=6);
+  /// GPS readings commonly carry 15+ digits of double precision, which
+  /// DRF rejects outright rather than truncating.
+  double _roundCoord(double value) => double.parse(value.toStringAsFixed(6));
 
   String _extractError(Map<String, dynamic> body) {
     final err = body['error'];

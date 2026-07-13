@@ -6,7 +6,10 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.accounts.serializers import UserSerializer
+from apps.accounts.social_auth import verify_google_id_token
 from apps.core.responses import success_response
 from apps.drivers.models import DriverDocument, DriverProfile
 from apps.drivers.serializers import (
@@ -18,6 +21,7 @@ from apps.drivers.serializers import (
     DriverProfileSerializer,
     DriverSignupSerializer,
     DriverSosSerializer,
+    GoogleAuthSerializer,
 )
 from apps.drivers.services import DriverService
 from apps.rbac.permissions import RBACPermission, has_permission
@@ -41,6 +45,31 @@ class DriverSignupView(APIView):
             "Driver account created",
             status=status.HTTP_201_CREATED,
         )
+
+
+class GoogleAuthView(APIView):
+    """Sign in an existing driver from a Google ID token obtained
+    client-side via the google_sign_in package. Never registers a new
+    driver — see DriverService.find_social_driver."""
+
+    permission_classes = [AllowAny]
+    serializer_class = GoogleAuthSerializer
+    service = DriverService()
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        claims = verify_google_id_token(serializer.validated_data["id_token"])
+        user = self.service.find_social_driver(email=claims["email"])
+        if not user.is_approved:
+            raise exceptions.PermissionDenied("Account is not active")
+        refresh = RefreshToken.for_user(user)
+        data = {
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user": UserSerializer(user).data,
+        }
+        return success_response(data, "Signed in with Google")
 
 
 class DriverProfileViewSet(viewsets.ModelViewSet):

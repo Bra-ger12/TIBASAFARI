@@ -15,6 +15,8 @@ abstract class DriverDataSource {
     required String password,
   });
 
+  Future<DriverSession> loginWithGoogle({required String idToken});
+
   Future<void> signupDriver({
     required String fullName,
     required String phoneNumber,
@@ -123,6 +125,35 @@ class ApiDriverDataSource implements DriverDataSource {
 
     // Return a minimal session from the login response.
     // The home screen loads the full profile and trips separately via fetchSession().
+    return _minimalSession(user is Map<String, dynamic> ? user : const {});
+  }
+
+  @override
+  Future<DriverSession> loginWithGoogle({required String idToken}) async {
+    final response = await _request(
+      'POST',
+      '/drivers/auth/google/',
+      body: {'id_token': idToken},
+      authenticated: false,
+    );
+    final data = _unwrapMap(response);
+    final accessToken = data['access'] as String?;
+    final user = data['user'];
+
+    if (accessToken == null || accessToken.isEmpty) {
+      throw Exception('Google sign-in succeeded without an access token');
+    }
+    if (user is Map<String, dynamic> && !_hasDriverAccess(user)) {
+      throw Exception('This account is not registered as a driver');
+    }
+
+    _accessToken = accessToken;
+    await AuthStorage.instance.saveTokens(
+      accessToken: accessToken,
+      refreshToken: data['refresh'] as String?,
+      userId: user is Map<String, dynamic> ? user['id']?.toString() : null,
+    );
+
     return _minimalSession(user is Map<String, dynamic> ? user : const {});
   }
 
@@ -308,8 +339,8 @@ class ApiDriverDataSource implements DriverDataSource {
       body: {
         'message': message,
         'trip_id': ?tripId,
-        'latitude': ?latitude,
-        'longitude': ?longitude,
+        'latitude': ?_roundCoord(latitude),
+        'longitude': ?_roundCoord(longitude),
       },
     );
     final data = _unwrapMap(response);
@@ -428,6 +459,7 @@ class ApiDriverDataSource implements DriverDataSource {
     return DriverAssignedTrip(
       id: (json['id'] ?? '').toString(),
       patientName: patientName,
+      patientPhone: _stringValue(json['patient_phone']) ?? '',
       appointmentType:
           _stringValue(json['appointment_type']) ??
           _stringValue(json['notes']) ??
@@ -466,6 +498,12 @@ class ApiDriverDataSource implements DriverDataSource {
     );
   }
 
+  /// The backend validates coordinates as DecimalField(decimal_places=6);
+  /// GPS readings commonly carry 15+ digits of double precision, which
+  /// DRF rejects outright rather than truncating.
+  double? _roundCoord(double? value) =>
+      value == null ? null : double.parse(value.toStringAsFixed(6));
+
   Future<Map<String, dynamic>> _request(
     String method,
     String path, {
@@ -473,19 +511,34 @@ class ApiDriverDataSource implements DriverDataSource {
     bool authenticated = true,
   }) async {
     final uri = Uri.parse('$_baseUrl$path');
-    final headers = <String, String>{
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      if (authenticated) 'Authorization': 'Bearer ${_requireToken()}',
-    };
-
     final encodedBody = body == null ? null : jsonEncode(body);
-    final response = switch (method) {
-      'GET' => await http.get(uri, headers: headers),
-      'PATCH' => await http.patch(uri, headers: headers, body: encodedBody),
-      'POST' => await http.post(uri, headers: headers, body: encodedBody),
-      _ => throw UnsupportedError('Unsupported method: $method'),
-    };
+
+    Future<http.Response> attempt(String? token) {
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      return switch (method) {
+        'GET' => http.get(uri, headers: headers),
+        'PATCH' => http.patch(uri, headers: headers, body: encodedBody),
+        'POST' => http.post(uri, headers: headers, body: encodedBody),
+        _ => throw UnsupportedError('Unsupported method: $method'),
+      };
+    }
+
+    var response =
+        await attempt(authenticated ? _requireToken() : null);
+
+    // The access token expires after an hour; silently refresh and retry
+    // once rather than surfacing the raw JWT error to the user.
+    if (authenticated && response.statusCode == 401) {
+      if (await _refreshAccessToken()) {
+        response = await attempt(_accessToken);
+      } else {
+        throw Exception('Your session has expired. Please sign in again.');
+      }
+    }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(_errorMessage(response));
@@ -495,6 +548,44 @@ class ApiDriverDataSource implements DriverDataSource {
     final decoded = jsonDecode(response.body);
     if (decoded is Map<String, dynamic>) return decoded;
     throw Exception('Unexpected API response');
+  }
+
+  /// Exchanges the stored refresh token for a new access token (the backend
+  /// rotates refresh tokens too, so the new one must be saved each time).
+  /// Returns false if there's no refresh token or it's itself expired/invalid.
+  Future<bool> _refreshAccessToken() async {
+    final refresh = await AuthStorage.instance.getRefreshToken();
+    if (refresh == null) return false;
+    try {
+      final resp = await http.post(
+        Uri.parse('$_baseUrl/auth/refresh/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'refresh': refresh}),
+      );
+      if (resp.statusCode != 200) {
+        await AuthStorage.instance.clear();
+        _accessToken = null;
+        return false;
+      }
+      final decoded = jsonDecode(resp.body) as Map<String, dynamic>;
+      final newAccess = decoded['access'] as String?;
+      if (newAccess == null) {
+        await AuthStorage.instance.clear();
+        _accessToken = null;
+        return false;
+      }
+      _accessToken = newAccess;
+      await AuthStorage.instance.saveTokens(
+        accessToken: newAccess,
+        refreshToken: decoded['refresh'] as String?,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   String _requireToken() {

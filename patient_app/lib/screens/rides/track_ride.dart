@@ -5,6 +5,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:patient_app/core/services/trip_api_service.dart';
 import 'package:patient_app/core/services/trip_tracking_service.dart';
 import 'package:patient_app/core/theme/app_theme.dart';
+import 'package:patient_app/models/auth_session.dart';
+import 'package:patient_app/screens/rides/trip_chat_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // ── Color aliases ─────────────────────────────────────────────────────────────
@@ -61,6 +63,7 @@ class _TrackRideScreenState extends State<TrackRideScreen>
   String? _driverName;
   String? _driverPhone;
   String? _vehicleLabel;
+  String? _currentUserId;
 
   StreamSubscription<Map<String, double>>? _locationSub;
   StreamSubscription<String>? _statusSub;
@@ -91,6 +94,9 @@ class _TrackRideScreenState extends State<TrackRideScreen>
     _vehicleLabel = widget.vehicleNumber;
     _connectTracking();
     _loadTripDetails();
+    AuthSession.load().then((session) {
+      if (mounted) setState(() => _currentUserId = session.userId);
+    });
   }
 
   /// Fetches driver_name/driver_phone/driver_vehicle_* for this trip —
@@ -105,6 +111,7 @@ class _TrackRideScreenState extends State<TrackRideScreen>
       final make = trip['driver_vehicle_make'] as String?;
       final model = trip['driver_vehicle_model'] as String?;
       final plate = trip['driver_vehicle_registration'] as String?;
+      final status = trip['status'] as String?;
       final vehicleParts = [
         if (make != null && make.isNotEmpty) make,
         if (model != null && model.isNotEmpty) model,
@@ -119,6 +126,11 @@ class _TrackRideScreenState extends State<TrackRideScreen>
             if (plate != null && plate.isNotEmpty) plate,
           ].join(' • ');
         }
+        // Sync the status timeline to the trip's actual current status —
+        // otherwise it stays stuck at the hardcoded initial value until the
+        // first WebSocket status push arrives, misrepresenting progress
+        // (e.g. "Driver Assigned" not ticking immediately after assignment).
+        if (status != null && status.isNotEmpty) _tripStatus = status;
       });
     } catch (_) {
       // Non-fatal: keep showing whatever was passed via nav args, if any.
@@ -151,7 +163,14 @@ class _TrackRideScreenState extends State<TrackRideScreen>
     });
 
     _statusSub = TripTrackingService.instance.statusStream.listen((status) {
-      if (mounted) setState(() => _tripStatus = status);
+      if (!mounted) return;
+      setState(() => _tripStatus = status);
+      // The WS only pushes status/location, never driver info — re-fetch
+      // the trip so a driver assigned after this screen opened (the
+      // common case: booking navigates here optimistically, before
+      // dispatch has assigned anyone) shows up instead of staying stuck
+      // on the "Driver" / "Vehicle" placeholders.
+      _loadTripDetails();
     });
   }
 
@@ -344,7 +363,7 @@ class _TrackRideScreenState extends State<TrackRideScreen>
                       const SizedBox(width: 12),
                       Expanded(child: _contactButton(
                         icon: Icons.chat_bubble_outline_rounded, label: 'Message', color: cBlue,
-                        onTap: _driverPhone != null ? () => _smsDriver() : null,
+                        onTap: widget.rideId != null ? () => _openChat() : null,
                       )),
                     ],
                   ),
@@ -459,8 +478,11 @@ class _TrackRideScreenState extends State<TrackRideScreen>
           const SizedBox(height: 16),
           ...List.generate(steps.length, (i) {
             final (label, icon, _) = steps[i];
-            final done = i < activeIdx;
-            final current = i == activeIdx;
+            // "Driver Assigned" is a one-time milestone, not an ongoing
+            // state to sit "in progress" on — tick it as soon as a driver
+            // has been assigned, rather than waiting for the *next* status.
+            final done = i == 0 ? currentIdx >= 0 : i < activeIdx;
+            final current = i == activeIdx && !done;
             final isLast = i == steps.length - 1;
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -559,11 +581,19 @@ class _TrackRideScreenState extends State<TrackRideScreen>
     if (await canLaunchUrl(uri)) launchUrl(uri);
   }
 
-  void _smsDriver() async {
-    final phone = _driverPhone;
-    if (phone == null) return;
-    final uri = Uri.parse('sms:$phone');
-    if (await canLaunchUrl(uri)) launchUrl(uri);
+  void _openChat() {
+    final id = widget.rideId;
+    if (id == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TripChatScreen(
+          tripId: id,
+          currentUserId: _currentUserId ?? '',
+          driverName: _driverName ?? 'Driver',
+        ),
+      ),
+    );
   }
 
   void _showCancelDialog() {

@@ -267,6 +267,13 @@ class _ActiveTripMapScreenState extends State<ActiveTripMapScreen> {
     }
   }
 
+  void _callPatient() async {
+    final phone = widget.trip.patientPhone;
+    if (phone.isEmpty) return;
+    final uri = Uri.parse('tel:$phone');
+    if (await canLaunchUrl(uri)) launchUrl(uri);
+  }
+
   void _openChat() {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => TripChatScreen(
@@ -426,6 +433,14 @@ class _ActiveTripMapScreenState extends State<ActiveTripMapScreen> {
             bottom: 200,
             child: _ChatFab(onTap: _openChat),
           ),
+
+          // Call button
+          if (widget.trip.patientPhone.isNotEmpty)
+            Positioned(
+              right: 16,
+              bottom: 260,
+              child: _CallFab(onTap: _callPatient),
+            ),
 
           // Bottom action panel
           Positioned(
@@ -723,6 +738,29 @@ class _ChatFab extends StatelessWidget {
           width: 52,
           height: 52,
           child: Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 22),
+        ),
+      ),
+    );
+  }
+}
+
+class _CallFab extends StatelessWidget {
+  final VoidCallback onTap;
+  const _CallFab({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.blue,
+      shape: const CircleBorder(),
+      elevation: 4,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: const SizedBox(
+          width: 52,
+          height: 52,
+          child: Icon(Icons.phone_rounded, color: Colors.white, size: 22),
         ),
       ),
     );

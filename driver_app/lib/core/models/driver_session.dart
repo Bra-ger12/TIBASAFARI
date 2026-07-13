@@ -45,6 +45,7 @@ extension VehicleTypeExtension on VehicleType {
 class DriverAssignedTrip {
   final String id;
   final String patientName;
+  final String patientPhone;
   final String appointmentType;
   final String pickupAddress;
   final String destination;
@@ -61,6 +62,7 @@ class DriverAssignedTrip {
   const DriverAssignedTrip({
     required this.id,
     required this.patientName,
+    this.patientPhone = '',
     required this.appointmentType,
     required this.pickupAddress,
     required this.destination,
@@ -78,6 +80,7 @@ class DriverAssignedTrip {
   DriverAssignedTrip copyWith({
     String? id,
     String? patientName,
+    String? patientPhone,
     String? appointmentType,
     String? pickupAddress,
     String? destination,
@@ -94,6 +97,7 @@ class DriverAssignedTrip {
     return DriverAssignedTrip(
       id: id ?? this.id,
       patientName: patientName ?? this.patientName,
+      patientPhone: patientPhone ?? this.patientPhone,
       appointmentType: appointmentType ?? this.appointmentType,
       pickupAddress: pickupAddress ?? this.pickupAddress,
       destination: destination ?? this.destination,
@@ -113,6 +117,7 @@ class DriverAssignedTrip {
   Map<String, dynamic> toJson() => {
         'id': id,
         'patient_name': patientName,
+        'patient_phone': patientPhone,
         'appointment_type': appointmentType,
         'pickup_address': pickupAddress,
         'destination': destination,
@@ -132,6 +137,7 @@ class DriverAssignedTrip {
     return DriverAssignedTrip(
       id: json['id'] as String,
       patientName: json['patient_name'] as String,
+      patientPhone: json['patient_phone'] as String? ?? '',
       appointmentType: json['appointment_type'] as String,
       pickupAddress: json['pickup_address'] as String,
       destination: json['destination'] as String,

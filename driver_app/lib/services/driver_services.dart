@@ -70,6 +70,10 @@ class DriverService {
     return _dataSource.login(email: email, password: password);
   }
 
+  Future<DriverSession> loginWithGoogle({required String idToken}) {
+    return _dataSource.loginWithGoogle(idToken: idToken);
+  }
+
   Future<void> signupDriver({
     required String fullName,
     required String phoneNumber,

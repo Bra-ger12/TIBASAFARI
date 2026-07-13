@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import '../../core/config/social_auth_config.dart';
 import '../../routes/app_routes.dart';
 import '../../services/driver_service.dart';
 
@@ -14,6 +16,13 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _obscure = true;
   bool _loading = false;
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email'],
+    serverClientId: SocialAuthConfig.googleServerClientId.isEmpty
+        ? null
+        : SocialAuthConfig.googleServerClientId,
+  );
 
   static const Color cTeal     = Color(0xFF1D9E75);
   static const Color cTealDark = Color(0xFF14754F);
@@ -40,6 +49,40 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
       );
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, AppRoutes.driverHome,
+          arguments: session);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+          backgroundColor: cError,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _handleGoogleLogin() async {
+    if (!SocialAuthConfig.googleConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Google sign-in isn't configured yet.")),
+      );
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final account = await _googleSignIn.signIn();
+      if (account == null) return; // user cancelled
+      final idToken = (await account.authentication).idToken;
+      if (idToken == null) {
+        throw Exception('Google did not return an identity token.');
+      }
+      final session =
+          await DriverService.instance.loginWithGoogle(idToken: idToken);
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, AppRoutes.driverHome,
           arguments: session);
@@ -346,6 +389,38 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
                         ),
                         Expanded(child: Divider()),
                       ]),
+                      const SizedBox(height: 18),
+
+                      // Google sign-in
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: cBorder),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(13)),
+                            backgroundColor: const Color(0xFFF8FCFF),
+                          ),
+                          onPressed: _loading ? null : _handleGoogleLogin,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                'assets/images/google_logo.png',
+                                width: 22,
+                                height: 22,
+                                errorBuilder: (_, _, _) =>
+                                    const Icon(Icons.g_mobiledata, size: 22),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text('Continue with Google',
+                                  style: TextStyle(
+                                      color: cInk, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 18),
 
                       // Terms
