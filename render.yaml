@@ -61,6 +61,22 @@ services:
       - key: GOOGLE_OAUTH_CLIENT_IDS
         value: "1029093901039-bljbf5po2so301ctjvaj62p7knsbjfrn.apps.googleusercontent.com"
 
+  - type: web
+    name: tibasafari-admin
+    runtime: static
+    rootDir: admin_web
+    buildCommand: >-
+      if cd flutter; then git pull && cd ..; else git clone https://github.com/flutter/flutter.git -b stable; fi &&
+      flutter/bin/flutter config --enable-web &&
+      flutter/bin/flutter pub get &&
+      flutter/bin/flutter build web --release --dart-define=API_BASE=https://tibasafari-backend.onrender.com/api/v1
+    staticPublishPath: build/web
+    autoDeploy: true
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
   - type: redis
     name: tibasafari-redis
     plan: free

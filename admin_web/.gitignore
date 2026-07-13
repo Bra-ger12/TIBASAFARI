@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Flutter SDK cloned in-place by the Render static-site build command
+/flutter/
