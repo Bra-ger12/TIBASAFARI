@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:patient_app/core/services/trip_api_service.dart';
 import 'package:patient_app/core/theme/app_theme.dart';
 import 'package:patient_app/models/auth_session.dart';
@@ -277,84 +280,347 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
 }
 
 // --- 2. MEDICAL PROFILE ---
-class MedicalProfileScreen extends StatelessWidget {
+class MedicalProfileScreen extends StatefulWidget {
   const MedicalProfileScreen({super.key});
-  
-  void _showAddSheet(BuildContext context) {
-    showModalBottomSheet(
+
+  @override
+  State<MedicalProfileScreen> createState() => _MedicalProfileScreenState();
+}
+
+class _MedicalProfileScreenState extends State<MedicalProfileScreen> {
+  Map<String, dynamic>? _profile;
+  List<Map<String, dynamic>> _documents = [];
+  bool _uploading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final profile = await TripApiService.instance.getPatientProfile();
+      final docs = await TripApiService.instance.fetchPatientDocuments();
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _documents = docs;
+      });
+    } catch (_) {
+      // Non-fatal: show the empty state if the fetch fails.
+    }
+  }
+
+  Future<void> _showEditSheet() async {
+    final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _MedicalInfoSheet(),
+      builder: (_) => _MedicalInfoSheet(profile: _profile ?? const {}),
     );
+    if (saved == true) _load();
+  }
+
+  Future<void> _uploadDocument() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 36, height: 4, decoration: BoxDecoration(color: cBorder, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_rounded, color: cTeal),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: cTeal),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 85);
+    if (picked == null || !mounted) return;
+
+    setState(() => _uploading = true);
+    try {
+      await TripApiService.instance.uploadPatientDocument(
+        docType: 'MEDICAL_RECORD',
+        file: File(picked.path),
+      );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Document uploaded'), backgroundColor: cTeal, behavior: SnackBarBehavior.floating));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: cError,
+            behavior: SnackBarBehavior.floating));
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final profile = _profile;
+    final hasMedicalInfo = profile != null &&
+        (((profile['medical_notes'] as String?)?.isNotEmpty ?? false) ||
+            (profile['mobility_needs'] != null && profile['mobility_needs'] != 'NONE') ||
+            profile['oxygen_required'] == true ||
+            profile['medical_escort_required'] == true ||
+            profile['iv_drip_required'] == true);
+
     return _BaseSettingsScreen(
       title: 'Medical Profile',
       children: [
-        _emptyState(
-          icon: Icons.medical_information_outlined,
-          title: 'No Medical Data Yet',
-          subtitle: 'Adding your medical profile helps us provide the safest and most comfortable transport experience for you.',
-          buttonText: 'Add Medical Info',
-          onButtonTap: () => _showAddSheet(context),
+        if (hasMedicalInfo)
+          _settingsGroup(children: [
+            if (profile['mobility_needs'] != null && profile['mobility_needs'] != 'NONE')
+              _settingsTile(
+                icon: Icons.accessible_rounded,
+                title: 'Mobility Needs',
+                subtitle: _mobilityLabel(profile['mobility_needs'] as String),
+                onTap: _showEditSheet,
+              ),
+            if (profile['oxygen_required'] == true ||
+                profile['medical_escort_required'] == true ||
+                profile['iv_drip_required'] == true)
+              _settingsTile(
+                icon: Icons.medical_services_rounded,
+                title: 'Medical Requirements',
+                subtitle: [
+                  if (profile['oxygen_required'] == true) 'Oxygen',
+                  if (profile['medical_escort_required'] == true) 'Medical Escort',
+                  if (profile['iv_drip_required'] == true) 'IV Drip',
+                ].join(' · '),
+                onTap: _showEditSheet,
+              ),
+            if ((profile['medical_notes'] as String?)?.isNotEmpty ?? false)
+              _settingsTile(
+                icon: Icons.notes_rounded,
+                title: 'Medical Notes',
+                subtitle: profile['medical_notes'] as String,
+                onTap: _showEditSheet,
+              ),
+          ])
+        else
+          _emptyState(
+            icon: Icons.medical_information_outlined,
+            title: 'No Medical Data Yet',
+            subtitle: 'Adding your medical profile helps us provide the safest and most comfortable transport experience for you.',
+            buttonText: 'Add Medical Info',
+            onButtonTap: _showEditSheet,
+          ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Medical Documents', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cTealDeep)),
+            TextButton.icon(
+              onPressed: _uploading ? null : _uploadDocument,
+              icon: _uploading
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: cTeal))
+                  : const Icon(Icons.upload_file_rounded, size: 18, color: cTeal),
+              label: const Text('Upload', style: TextStyle(color: cTeal, fontWeight: FontWeight.w700)),
+            ),
+          ],
         ),
+        const SizedBox(height: 8),
+        if (_documents.isEmpty)
+          _emptyState(
+            icon: Icons.folder_open_rounded,
+            title: 'No Documents Uploaded',
+            subtitle: 'Upload medical records, prescriptions, or insurance cards so drivers and dispatch can access them if needed.',
+          )
+        else
+          _settingsGroup(
+            children: _documents
+                .map((doc) => _settingsTile(
+                      icon: Icons.description_rounded,
+                      title: (doc['doc_type_display'] as String?)?.isNotEmpty == true
+                          ? doc['doc_type_display'] as String
+                          : (doc['doc_type'] as String? ?? 'Document'),
+                      subtitle: (doc['description'] as String?)?.isNotEmpty == true
+                          ? doc['description'] as String
+                          : null,
+                      onTap: () {},
+                    ))
+                .toList(),
+          ),
       ],
     );
+  }
+
+  String _mobilityLabel(String value) {
+    switch (value) {
+      case 'WHEELCHAIR':
+        return 'Wheelchair';
+      case 'STRETCHER':
+        return 'Stretcher';
+      case 'WALKER_CRUTCHES':
+        return 'Walker / Crutches';
+      default:
+        return value;
+    }
   }
 }
 
 class _MedicalInfoSheet extends StatefulWidget {
-  const _MedicalInfoSheet();
+  final Map<String, dynamic> profile;
+  const _MedicalInfoSheet({required this.profile});
   @override
   State<_MedicalInfoSheet> createState() => _MedicalInfoSheetState();
 }
 class _MedicalInfoSheetState extends State<_MedicalInfoSheet> {
-  final _bloodCtrl = TextEditingController();
-  final _allergyCtrl = TextEditingController();
-  final _conditionCtrl = TextEditingController();
+  late final TextEditingController _notesCtrl;
+  late String _mobilityNeeds;
+  late bool _oxygenRequired;
+  late bool _medicalEscortRequired;
+  late bool _ivDripRequired;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _notesCtrl = TextEditingController(text: widget.profile['medical_notes'] as String? ?? '');
+    _mobilityNeeds = widget.profile['mobility_needs'] as String? ?? 'NONE';
+    _oxygenRequired = widget.profile['oxygen_required'] as bool? ?? false;
+    _medicalEscortRequired = widget.profile['medical_escort_required'] as bool? ?? false;
+    _ivDripRequired = widget.profile['iv_drip_required'] as bool? ?? false;
+  }
 
   @override
   void dispose() {
-    _bloodCtrl.dispose();
-    _allergyCtrl.dispose();
-    _conditionCtrl.dispose();
+    _notesCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _isSaving = true);
+    try {
+      await TripApiService.instance.updatePatientProfile({
+        'medical_notes': _notesCtrl.text.trim(),
+        'mobility_needs': _mobilityNeeds,
+        'oxygen_required': _oxygenRequired,
+        'medical_escort_required': _medicalEscortRequired,
+        'iv_drip_required': _ivDripRequired,
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: cError));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).viewInsets.bottom + 32),
       decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: cBorder, borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 20),
-          const Text('Add Medical Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cTealDeep)),
-          const SizedBox(height: 20),
-          _sheetField(ctrl: _bloodCtrl, label: 'Blood Type', hint: 'e.g., O+'),
-          _sheetField(ctrl: _allergyCtrl, label: 'Allergies', hint: 'List any allergies'),
-          _sheetField(ctrl: _conditionCtrl, label: 'Medical Conditions', hint: 'e.g., Diabetes, Asthma'),
-          const SizedBox(height: 24),
-          SizedBox(width: double.infinity, height: 52, child: ElevatedButton(onPressed: () { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Medical info saved'), backgroundColor: cTeal, behavior: SnackBarBehavior.floating)); }, style: ElevatedButton.styleFrom(backgroundColor: cTeal, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), child: const Text('Save Information', style: TextStyle(fontWeight: FontWeight.w700)))),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: cBorder, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 20),
+            const Text('Medical Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cTealDeep)),
+            const SizedBox(height: 20),
+            const Text('Mobility Needs', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cMutedLight)),
+            const SizedBox(height: 8),
+            _mobilityChips(),
+            const SizedBox(height: 20),
+            _switchRow('Oxygen Required', _oxygenRequired, (v) => setState(() => _oxygenRequired = v)),
+            _switchRow('Medical Escort Required', _medicalEscortRequired, (v) => setState(() => _medicalEscortRequired = v)),
+            _switchRow('IV Drip Required', _ivDripRequired, (v) => setState(() => _ivDripRequired = v)),
+            const SizedBox(height: 16),
+            const Text('Medical Notes', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cMutedLight)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _notesCtrl,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'e.g., Diabetes, allergies, blood type',
+                hintStyle: const TextStyle(color: cMutedLight),
+                filled: true,
+                fillColor: cBg,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+              style: const TextStyle(fontWeight: FontWeight.w600, color: cTealDeep),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _isSaving ? null : _save,
+                style: ElevatedButton.styleFrom(backgroundColor: cTeal, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                child: _isSaving
+                    ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                    : const Text('Save Information', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _sheetField({required TextEditingController ctrl, required String label, required String hint}) {
+  Widget _mobilityChips() {
+    const options = [
+      ('NONE', 'None'),
+      ('WHEELCHAIR', 'Wheelchair'),
+      ('STRETCHER', 'Stretcher'),
+      ('WALKER_CRUTCHES', 'Walker / Crutches'),
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: options.map((opt) {
+        final selected = _mobilityNeeds == opt.$1;
+        return ChoiceChip(
+          label: Text(opt.$2),
+          selected: selected,
+          onSelected: (_) => setState(() => _mobilityNeeds = opt.$1),
+          selectedColor: cTeal,
+          backgroundColor: cBg,
+          labelStyle: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: selected ? Colors.white : cTealDeep),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _switchRow(String label, bool value, ValueChanged<bool> onChanged) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cMutedLight)),
-        const SizedBox(height: 8),
-        TextField(controller: ctrl, decoration: InputDecoration(hintText: hint, hintStyle: const TextStyle(color: cMutedLight), filled: true, fillColor: cBg, border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)), style: const TextStyle(fontWeight: FontWeight.w600, color: cTealDeep)),
-      ]),
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep)),
+          Switch(value: value, onChanged: onChanged, activeThumbColor: cTeal),
+        ],
+      ),
     );
   }
 }

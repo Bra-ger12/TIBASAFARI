@@ -13,9 +13,7 @@ import 'screens/invoice_detail_screen.dart';
 import 'screens/notifications_broadcast_screen.dart';
 import 'screens/patient_profile_screen.dart';
 import 'screens/patients_list_screen.dart';
-import 'screens/payments_pending_screen.dart';
 import 'screens/reports_drivers_screen.dart';
-import 'screens/reports_revenue_screen.dart';
 import 'screens/reports_trips_screen.dart';
 import 'screens/settings_config_screen.dart';
 import 'screens/settings_profile_screen.dart';
@@ -102,14 +100,10 @@ class _AppShellState extends State<AppShell> {
         return BillingInvoicesScreen(nav: _nav);
       case ViewKey.invoiceDetail:
         return InvoiceDetailScreen(nav: _nav);
-      case ViewKey.paymentsPending:
-        return PaymentsPendingScreen(nav: _nav);
       case ViewKey.reportsTrips:
         return ReportsTripsScreen(nav: _nav);
       case ViewKey.reportsDrivers:
         return ReportsDriversScreen(nav: _nav);
-      case ViewKey.reportsRevenue:
-        return ReportsRevenueScreen(nav: _nav);
       case ViewKey.notificationsBroadcast:
         return const NotificationsBroadcastScreen();
       case ViewKey.settingsProfile:

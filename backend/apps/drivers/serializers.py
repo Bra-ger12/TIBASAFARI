@@ -1,11 +1,11 @@
 from django.db import transaction
-from django.db.models import Avg, Count
+from django.db.models import Avg, Count, Q, Sum
 from rest_framework import serializers
 
 from apps.accounts.models import User
 from apps.drivers.models import DriverDocument, DriverProfile
 from apps.rbac.models import Permission, Role, UserRole
-from apps.trips.models import Trip, TripRating
+from apps.trips.models import Trip, TripAssignmentEvent, TripRating
 
 
 class DriverProfileSerializer(serializers.ModelSerializer):
@@ -17,6 +17,9 @@ class DriverProfileSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     trips_count = serializers.SerializerMethodField()
+    completed_trips_count = serializers.SerializerMethodField()
+    revenue = serializers.SerializerMethodField()
+    acceptance_rate = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
     documents = serializers.SerializerMethodField()
@@ -34,6 +37,9 @@ class DriverProfileSerializer(serializers.ModelSerializer):
             "vehicle_registration",
             "is_available",
             "trips_count",
+            "completed_trips_count",
+            "revenue",
+            "acceptance_rate",
             "rating",
             "rating_count",
             "documents",
@@ -50,6 +56,9 @@ class DriverProfileSerializer(serializers.ModelSerializer):
             "user_phone",
             "vehicle_registration",
             "trips_count",
+            "completed_trips_count",
+            "revenue",
+            "acceptance_rate",
             "rating",
             "rating_count",
             "documents",
@@ -65,6 +74,25 @@ class DriverProfileSerializer(serializers.ModelSerializer):
 
     def get_trips_count(self, obj):
         return Trip.objects.filter(driver=obj.user).count()
+
+    def get_completed_trips_count(self, obj):
+        return Trip.objects.filter(driver=obj.user, status=Trip.Status.COMPLETED).count()
+
+    def get_revenue(self, obj):
+        total = Trip.objects.filter(
+            driver=obj.user, status=Trip.Status.COMPLETED
+        ).aggregate(total=Sum("final_fare"))["total"]
+        return total or 0
+
+    def get_acceptance_rate(self, obj):
+        counts = TripAssignmentEvent.objects.filter(driver=obj.user).aggregate(
+            accepted=Count("id", filter=Q(event_type=TripAssignmentEvent.EventType.ACCEPTED)),
+            rejected=Count("id", filter=Q(event_type=TripAssignmentEvent.EventType.REJECTED)),
+        )
+        decided = counts["accepted"] + counts["rejected"]
+        if decided == 0:
+            return None
+        return round(counts["accepted"] / decided * 100, 1)
 
     def _rating_stats(self, obj):
         # Computed on read rather than stored/recalculated on write — always

@@ -10,7 +10,6 @@ import 'package:admin_web/screens/notifications_broadcast_screen.dart';
 import 'package:admin_web/screens/patient_profile_screen.dart';
 import 'package:admin_web/screens/patients_list_screen.dart';
 import 'package:admin_web/screens/reports_drivers_screen.dart';
-import 'package:admin_web/screens/reports_revenue_screen.dart';
 import 'package:admin_web/screens/reports_trips_screen.dart';
 import 'package:admin_web/screens/settings_config_screen.dart';
 import 'package:admin_web/screens/settings_profile_screen.dart';
@@ -44,12 +43,11 @@ void main() {
       InvoiceDetailScreen(nav: nav),
       ReportsTripsScreen(nav: nav),
       ReportsDriversScreen(nav: nav),
-      ReportsRevenueScreen(nav: nav),
       NotificationsBroadcastScreen(),
       SettingsProfileScreen(),
       SettingsConfigScreen(),
     ];
 
-    expect(pages, hasLength(22));
+    expect(pages, hasLength(21));
   });
 }

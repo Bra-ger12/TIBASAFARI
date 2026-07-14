@@ -283,9 +283,9 @@ class _MapPainter extends CustomPainter {
       canvas.drawCircle(p, 3, Paint()..color = const Color(0xFF34D399).withValues(alpha: 0.7));  // ✅ FIXED
     }
 
-    // Vehicle markers
+    // Vehicle markers — live position once known, else the pickup point
     for (final t in trips) {
-      final p = project(t.lat, t.lng, size);
+      final p = project(t.vehicleLat ?? t.lat, t.vehicleLng ?? t.lng, size);
       // pulse ring
       canvas.drawCircle(
           p, 16, Paint()..color = const Color(0xFF38BDF8).withValues(alpha: 0.15));  // ✅ FIXED

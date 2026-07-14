@@ -60,6 +60,16 @@ class TripConsumer(AsyncWebsocketConsumer):
                         "lng": lng,
                     },
                 )
+                await self.channel_layer.group_send(
+                    "dispatch",
+                    {
+                        "type": "dispatch.driver_location",
+                        "driver_id": str(user.id),
+                        "trip_id": self.trip_id,
+                        "lat": lat,
+                        "lng": lng,
+                    },
+                )
 
         elif msg_type == "chat":
             body = (data.get("body") or "").strip()
@@ -140,3 +150,62 @@ class TripConsumer(AsyncWebsocketConsumer):
 
         trip = Trip.objects.get(id=self.trip_id)
         TripService().send_trip_message(trip, sender=user, body=body)
+
+
+class DispatchConsumer(AsyncWebsocketConsumer):
+    """Dispatch-wide channel for the admin dashboard's live map — broadcasts
+    every trip status change and driver location update system-wide (not
+    scoped to one trip room, unlike TripConsumer). Read-only from the
+    client's side; staff never send anything over this connection."""
+
+    async def connect(self):
+        user = self.scope.get("user")
+        if not user or isinstance(user, AnonymousUser):
+            await self.close(code=4001)
+            return
+
+        allowed = await self._has_dashboard_access(user)
+        if not allowed:
+            await self.close(code=4003)
+            return
+
+        self.group_name = "dispatch"
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, "group_name"):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def dispatch_trip_update(self, event):
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "trip_update",
+                    "trip_id": event["trip_id"],
+                    "status": event["status"],
+                    "driver_id": event["driver_id"],
+                    "pickup_lat": event["pickup_lat"],
+                    "pickup_lng": event["pickup_lng"],
+                }
+            )
+        )
+
+    async def dispatch_driver_location(self, event):
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "driver_location",
+                    "driver_id": event["driver_id"],
+                    "trip_id": event.get("trip_id"),
+                    "lat": event["lat"],
+                    "lng": event["lng"],
+                }
+            )
+        )
+
+    @database_sync_to_async
+    def _has_dashboard_access(self, user):
+        from apps.rbac.permissions import has_permission
+
+        return has_permission(user, "view_dashboard")

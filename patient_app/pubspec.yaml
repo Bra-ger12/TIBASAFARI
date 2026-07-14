@@ -33,6 +33,9 @@ dependencies:
   # Formatting
   intl: ^0.20.1
 
+  # Medical document uploads
+  image_picker: ^1.1.2
+
   # Fonts
   google_fonts: ^6.2.1
 

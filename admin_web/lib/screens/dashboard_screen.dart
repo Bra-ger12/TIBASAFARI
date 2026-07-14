@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/dispatch_ws_service.dart';
 import '../services/format.dart';
 import '../theme/app_theme.dart';
 import '../widgets/kpi_card.dart';
@@ -26,6 +28,11 @@ class _DashboardScreenState extends State<DashboardScreen>
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
 
+  List<ActiveTripMapItem>? _liveMapItems;
+  StreamSubscription<TripUpdateEvent>? _tripUpdateSub;
+  StreamSubscription<DriverLocationEvent>? _locationSub;
+  Timer? _refreshDebounce;
+
   @override
   void initState() {
     super.initState();
@@ -38,12 +45,75 @@ class _DashboardScreenState extends State<DashboardScreen>
       parent: _fadeController,
       curve: Curves.easeOutCubic,
     );
+
+    DispatchWsService.instance.connect();
+    _tripUpdateSub =
+        DispatchWsService.instance.tripUpdates.listen(_onTripUpdate);
+    _locationSub =
+        DispatchWsService.instance.driverLocations.listen(_onDriverLocation);
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
+    _tripUpdateSub?.cancel();
+    _locationSub?.cancel();
+    _refreshDebounce?.cancel();
     super.dispose();
+  }
+
+  static const _activeStatuses = {'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED'};
+
+  void _onTripUpdate(TripUpdateEvent event) {
+    if (_liveMapItems == null) return;
+    final items = _liveMapItems!;
+    final index = items.indexWhere((t) => t.id == event.tripId);
+
+    if (!_activeStatuses.contains(event.status)) {
+      // Trip completed/cancelled/rejected back to the pool — drop its marker.
+      if (index != -1) {
+        setState(() => _liveMapItems = [...items]..removeAt(index));
+      }
+      return;
+    }
+
+    if (index != -1) {
+      setState(() {
+        final updated = [...items];
+        updated[index] = items[index].copyWith(status: event.status);
+        _liveMapItems = updated;
+      });
+    } else {
+      // A trip we don't have full details for yet (newly assigned) —
+      // debounce a targeted re-fetch rather than guessing its fields.
+      _refreshDebounce?.cancel();
+      _refreshDebounce = Timer(const Duration(seconds: 1), _refreshMapItems);
+    }
+  }
+
+  void _onDriverLocation(DriverLocationEvent event) {
+    if (_liveMapItems == null) return;
+    final items = _liveMapItems!;
+    final index = items.indexWhere((t) => t.driverId == event.driverId);
+    if (index == -1) return;
+    setState(() {
+      final updated = [...items];
+      updated[index] =
+          items[index].copyWith(vehicleLat: event.lat, vehicleLng: event.lng);
+      _liveMapItems = updated;
+    });
+  }
+
+  Future<void> _refreshMapItems() async {
+    try {
+      final items = await ApiService.list('/dashboard/active-trips/');
+      if (!mounted) return;
+      setState(() {
+        _liveMapItems = items.map(ActiveTripMapItem.fromJson).toList();
+      });
+    } catch (_) {
+      // Keep showing whatever we already have — the next event will retry.
+    }
   }
 
   /// Detects common API failures and returns a user-friendly message.
@@ -135,11 +205,13 @@ class _DashboardScreenState extends State<DashboardScreen>
     _fadeController.reset();
     setState(() {
       _future = _load();
+      _liveMapItems = null;
     });
   }
 
-  void _onDataLoaded() {
+  void _onDataLoaded(_DashboardData data) {
     _fadeController.forward();
+    _liveMapItems ??= List.of(data.mapItems);
   }
 
   @override
@@ -174,15 +246,13 @@ class _DashboardScreenState extends State<DashboardScreen>
           );
         }
 
-        _onDataLoaded();
         final data = snap.data!;
+        _onDataLoaded(data);
         return PageScaffold(
           title: 'Dashboard',
           description:
               'Real-time overview of Tiba Safari medical transport operations.',
           actions: [
-            _RevenueButton(
-                onTap: () => widget.nav.navigate(ViewKey.reportsRevenue)),
             _RefreshButton(onTap: _reload),
           ],
           child: FadeTransition(
@@ -320,13 +390,14 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ─── Map + Active Trips ─────────────────────────────────────────────
 
   Widget _mapAndTrips(_DashboardData data) {
+    final mapItems = _liveMapItems ?? data.mapItems;
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth > 900) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(flex: 5, child: _mapCard(data.mapItems)),
+              Expanded(flex: 5, child: _mapCard(mapItems)),
               const SizedBox(width: 16),
               Expanded(flex: 3, child: _activeTripsCard(data.activeTrips)),
             ],
@@ -334,7 +405,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         }
         return Column(
           children: [
-            _mapCard(data.mapItems),
+            _mapCard(mapItems),
             const SizedBox(height: 16),
             _activeTripsCard(data.activeTrips),
           ],
@@ -423,8 +494,6 @@ class _DashboardScreenState extends State<DashboardScreen>
               Expanded(child: _dispatchQueue(data.pendingBookings)),
               const SizedBox(width: 16),
               Expanded(child: _driverAvailability(data.drivers)),
-              const SizedBox(width: 16),
-              Expanded(child: _financeAlerts(data.invoices)),
             ],
           );
         }
@@ -433,8 +502,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             _dispatchQueue(data.pendingBookings),
             const SizedBox(height: 16),
             _driverAvailability(data.drivers),
-            const SizedBox(height: 16),
-            _financeAlerts(data.invoices),
           ],
         );
       },
@@ -535,56 +602,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _financeAlerts(List<Invoice> invoices) {
-    final rows = invoices
-        .where((i) => i.status == 'overdue' || i.status == 'unpaid')
-        .take(5)
-        .toList();
-    final outstanding = invoices
-        .where((i) => i.status != 'paid')
-        .fold(0.0, (sum, i) => sum + i.amount);
-
-    return _GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionHeader(
-            icon: Icons.receipt_long_rounded,
-            iconColor: const Color(0xFF7C3AED),
-            title: 'Finance Alerts',
-            subtitle: '${formatCurrency(outstanding)} outstanding',
-            trailing: _ViewAllButton(
-              label: 'Review',
-              onTap: () => widget.nav.navigate(ViewKey.billingInvoices),
-            ),
-          ),
-          if (rows.isEmpty)
-            const _EmptyPanel(
-              icon: Icons.verified_rounded,
-              title: 'All paid up',
-              subtitle: 'No outstanding invoice alerts.',
-            )
-          else
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-              child: Column(
-                children: [
-                  for (int i = 0; i < rows.length; i++) ...[
-                    _InvoiceRow(
-                      invoice: rows[i],
-                      onTap: () =>
-                          widget.nav.openDetail('invoice', rows[i].id),
-                    ),
-                    if (i < rows.length - 1) const _SubtleDivider(),
-                  ],
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -987,75 +1004,6 @@ class _DriverRow extends StatelessWidget {
   }
 }
 
-class _InvoiceRow extends StatelessWidget {
-  final Invoice invoice;
-  final VoidCallback onTap;
-
-  const _InvoiceRow({required this.invoice, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final meta = invoiceStatus(invoice.status);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.receipt_long_rounded,
-                    color: Color(0xFF7C3AED), size: 14),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      invoice.number,
-                      style: const TextStyle(
-                          fontSize: 12.5, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      '${invoice.patient?.name ?? "-"}  ·  due ${formatDate(invoice.dueDate)}',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.textMuted.withValues(alpha: 0.8)),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    formatCurrency(invoice.amount),
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 2),
-                  StatusBadge(tone: meta.tone, label: meta.label, dot: true),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // SUMMARY TILE
 // ═══════════════════════════════════════════════════════════════════════
@@ -1158,27 +1106,6 @@ class _SummaryTile extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════
 // ACTION BUTTONS
 // ═══════════════════════════════════════════════════════════════════════
-
-class _RevenueButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _RevenueButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: const Icon(Icons.trending_up_rounded, size: 15),
-      label: const Text('Revenue Report'),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        textStyle:
-            const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-}
 
 class _RefreshButton extends StatelessWidget {
   final VoidCallback onTap;

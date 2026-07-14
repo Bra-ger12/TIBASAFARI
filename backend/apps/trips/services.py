@@ -15,16 +15,29 @@ from django.utils import timezone
 from rest_framework import exceptions
 
 from apps.notifications.models import Notification
-from apps.trips.models import Trip, TripMessage
+from apps.trips.models import Trip, TripAssignmentEvent, TripMessage
 
 
-def _push_trip_status(trip_id: str, new_status: str):
-    """Broadcast trip status change to the trip WS room (non-blocking)."""
+def _push_trip_status(trip: "Trip"):
+    """Broadcast a trip status change to the trip's own WS room, and to the
+    dispatch-wide admin room so the live dashboard map can add/update/drop
+    this trip without a page reload (non-blocking)."""
     try:
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
-            f"trip_{trip_id}",
-            {"type": "trip.status", "trip_id": str(trip_id), "status": new_status},
+            f"trip_{trip.id}",
+            {"type": "trip.status", "trip_id": str(trip.id), "status": trip.status},
+        )
+        async_to_sync(channel_layer.group_send)(
+            "dispatch",
+            {
+                "type": "dispatch.trip_update",
+                "trip_id": str(trip.id),
+                "status": trip.status,
+                "driver_id": str(trip.driver_id) if trip.driver_id else None,
+                "pickup_lat": float(trip.pickup_latitude) if trip.pickup_latitude is not None else None,
+                "pickup_lng": float(trip.pickup_longitude) if trip.pickup_longitude is not None else None,
+            },
         )
     except Exception:
         pass  # WS unavailable during tests / cold start — don't crash HTTP
@@ -115,7 +128,10 @@ class TripService:
         trip.driver = driver
         trip.status = Trip.Status.ASSIGNED
         trip.save(update_fields=["driver", "status", "updated_at"])
-        _push_trip_status(trip.id, trip.status)
+        _push_trip_status(trip)
+        TripAssignmentEvent.objects.create(
+            trip=trip, driver=driver, event_type=TripAssignmentEvent.EventType.ASSIGNED
+        )
 
         profile = getattr(driver, "driver_profile", None)
         vehicle = getattr(profile, "vehicle", None) if profile else None
@@ -154,7 +170,10 @@ class TripService:
         trip.status = Trip.Status.ACCEPTED
         trip.accepted_at = timezone.now()
         trip.save(update_fields=["status", "accepted_at", "updated_at"])
-        _push_trip_status(trip.id, trip.status)
+        _push_trip_status(trip)
+        TripAssignmentEvent.objects.create(
+            trip=trip, driver=driver, event_type=TripAssignmentEvent.EventType.ACCEPTED
+        )
         _notify(
             trip.patient,
             "Driver On the Way",
@@ -167,10 +186,13 @@ class TripService:
         self._assert_driver(trip, driver)
         if trip.status != Trip.Status.ASSIGNED:
             raise exceptions.ValidationError("Only assigned trips can be rejected")
+        TripAssignmentEvent.objects.create(
+            trip=trip, driver=driver, event_type=TripAssignmentEvent.EventType.REJECTED
+        )
         trip.driver = None
         trip.status = Trip.Status.REQUESTED
         trip.save(update_fields=["driver", "status", "updated_at"])
-        _push_trip_status(trip.id, trip.status)
+        _push_trip_status(trip)
         _notify(
             trip.patient,
             "Driver Unavailable",
@@ -186,7 +208,7 @@ class TripService:
         trip.status = Trip.Status.EN_ROUTE
         trip.started_at = timezone.now()
         trip.save(update_fields=["status", "started_at", "updated_at"])
-        _push_trip_status(trip.id, trip.status)
+        _push_trip_status(trip)
         _notify(
             trip.patient,
             "Trip Started",
@@ -202,7 +224,7 @@ class TripService:
         trip.status = Trip.Status.ARRIVED
         trip.arrived_at = timezone.now()
         trip.save(update_fields=["status", "arrived_at", "updated_at"])
-        _push_trip_status(trip.id, trip.status)
+        _push_trip_status(trip)
         _notify(
             trip.patient,
             "Arrived at Destination",
@@ -269,7 +291,7 @@ class TripService:
             update_fields += ["final_fare", "final_fare_breakdown"]
 
         trip.save(update_fields=update_fields)
-        _push_trip_status(trip.id, trip.status)
+        _push_trip_status(trip)
         _notify(
             trip.patient,
             "Trip Completed",
@@ -289,7 +311,7 @@ class TripService:
         trip.status = Trip.Status.CANCELLED
         trip.cancelled_at = timezone.now()
         trip.save(update_fields=["status", "cancelled_at", "updated_at"])
-        _push_trip_status(trip.id, trip.status)
+        _push_trip_status(trip)
         if trip.driver_id:
             _notify(
                 trip.driver,

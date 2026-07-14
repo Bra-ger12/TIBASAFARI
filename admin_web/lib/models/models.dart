@@ -168,45 +168,78 @@ class Vehicle {
       );
 }
 
+class VehicleExpense {
+  final String id;
+  final String vehicleId;
+  final String vehicleRegistration;
+  final String category;
+  final String description;
+  final double amount;
+  final String incurredAt;
+
+  VehicleExpense({
+    required this.id,
+    required this.vehicleId,
+    required this.vehicleRegistration,
+    required this.category,
+    required this.description,
+    required this.amount,
+    required this.incurredAt,
+  });
+
+  factory VehicleExpense.fromJson(Map<String, dynamic> j) => VehicleExpense(
+        id: (j['id'] ?? '').toString(),
+        vehicleId: (j['vehicle'] ?? '').toString(),
+        vehicleRegistration: j['vehicle_registration'] as String? ?? '',
+        category: j['category'] as String? ?? 'MAINTENANCE',
+        description: j['description'] as String? ?? '',
+        amount: _toDouble(j['amount'] ?? 0),
+        incurredAt: j['incurred_at'] as String? ?? '',
+      );
+}
+
 class Patient {
   final String id;
   final String name;
   final String phone;
   final String? email;
-  final String? dateOfBirth;
-  final int? age;
   final String? gender;
   final String? address;
   final bool active;
   final String? mobilityNeeds;
   final List<String>? specialNeeds;
   final String? medicalNotes;
+  final bool oxygenRequired;
+  final bool medicalEscortRequired;
+  final bool ivDripRequired;
   final String? emergencyContactName;
   final String? emergencyContactPhone;
   final int tripsCount;
   final String createdAt;
+  final List<PatientDocument> documents;
 
   Patient({
     required this.id,
     required this.name,
     required this.phone,
     this.email,
-    this.dateOfBirth,
-    this.age,
     this.gender,
     this.address,
     required this.active,
     this.mobilityNeeds,
     this.specialNeeds,
     this.medicalNotes,
+    this.oxygenRequired = false,
+    this.medicalEscortRequired = false,
+    this.ivDripRequired = false,
     this.emergencyContactName,
     this.emergencyContactPhone,
     required this.tripsCount,
     required this.createdAt,
+    this.documents = const [],
   });
 
   factory Patient.fromJson(Map<String, dynamic> j) {
-    final dob = j['date_of_birth'] as String? ?? j['dateOfBirth'] as String?;
     final needs = _parseNeeds(
         j['special_needs'] ?? j['specialNeeds'] ??
         j['mobility_needs'] ?? j['mobilityNeeds']);
@@ -218,8 +251,6 @@ class Patient {
           '',
       phone: j['user_phone'] as String? ?? j['phone'] as String? ?? '',
       email: j['user_email'] as String? ?? j['email'] as String?,
-      dateOfBirth: dob,
-      age: _ageFromDob(dob) ?? (j['age'] as num?)?.toInt(),
       gender: j['gender'] as String?,
       address: j['default_pickup_address'] as String? ??
           j['address'] as String?,
@@ -229,6 +260,9 @@ class Patient {
       specialNeeds: needs,
       medicalNotes: j['medical_notes'] as String? ??
           j['medicalNotes'] as String?,
+      oxygenRequired: j['oxygen_required'] as bool? ?? false,
+      medicalEscortRequired: j['medical_escort_required'] as bool? ?? false,
+      ivDripRequired: j['iv_drip_required'] as bool? ?? false,
       emergencyContactName: j['emergency_contact_name'] as String? ??
           j['emergencyContactName'] as String?,
       emergencyContactPhone: j['emergency_contact_phone'] as String? ??
@@ -237,6 +271,40 @@ class Patient {
           (j['tripsCount'] as num?)?.toInt() ??
           0,
       createdAt: j['created_at'] as String? ?? j['createdAt'] as String? ?? '',
+      documents: (j['documents'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(PatientDocument.fromJson)
+              .toList() ??
+          const [],
+    );
+  }
+}
+
+class PatientDocument {
+  final String id;
+  final String docType;
+  final String docTypeDisplay;
+  final String? fileUrl;
+  final String description;
+  final String? uploadedAt;
+
+  PatientDocument({
+    required this.id,
+    required this.docType,
+    required this.docTypeDisplay,
+    this.fileUrl,
+    required this.description,
+    this.uploadedAt,
+  });
+
+  factory PatientDocument.fromJson(Map<String, dynamic> j) {
+    return PatientDocument(
+      id: (j['id'] ?? '').toString(),
+      docType: j['doc_type'] as String? ?? '',
+      docTypeDisplay: j['doc_type_display'] as String? ?? '',
+      fileUrl: j['file'] as String?,
+      description: j['description'] as String? ?? '',
+      uploadedAt: j['uploaded_at'] as String?,
     );
   }
 }
@@ -603,32 +671,37 @@ class DashboardKpi {
   final int pendingBookings;
   final int driversOnline;
   final double revenueToday;
-  final int activeTripsTrend;
-  final int pendingBookingsTrend;
-  final int driversOnlineTrend;
-  final int revenueTrend;
+  // Null (not 0) when there's no real day-over-day figure to compare —
+  // the "vs yesterday" badge only renders when this is non-null, so a
+  // stat with no trend data simply shows no badge rather than a fake 0%.
+  final int? activeTripsTrend;
+  final int? pendingBookingsTrend;
+  final int? driversOnlineTrend;
+  final int? revenueTrend;
 
   DashboardKpi({
     required this.activeTrips,
     required this.pendingBookings,
     required this.driversOnline,
     required this.revenueToday,
-    this.activeTripsTrend = 0,
-    this.pendingBookingsTrend = 0,
-    this.driversOnlineTrend = 0,
-    this.revenueTrend = 0,
+    this.activeTripsTrend,
+    this.pendingBookingsTrend,
+    this.driversOnlineTrend,
+    this.revenueTrend,
   });
 
   /// Parses from the Django `/dashboard/stats/` response shape:
-  /// `{ trips: {active, requested, ...}, drivers: {available, total}, ... }`
+  /// `{ trips: {active, requested, ...}, drivers: {available, total}, revenue: {today, yesterday, trend_pct} }`
   factory DashboardKpi.fromStats(Map<String, dynamic> stats) {
     final trips = stats['trips'] as Map<String, dynamic>? ?? {};
     final drivers = stats['drivers'] as Map<String, dynamic>? ?? {};
+    final revenue = stats['revenue'] as Map<String, dynamic>? ?? {};
     return DashboardKpi(
       activeTrips: (trips['active'] as num?)?.toInt() ?? 0,
       pendingBookings: (trips['requested'] as num?)?.toInt() ?? 0,
       driversOnline: (drivers['available'] as num?)?.toInt() ?? 0,
-      revenueToday: 0.0,
+      revenueToday: _toDouble(revenue['today'] ?? 0),
+      revenueTrend: (revenue['trend_pct'] as num?)?.round() ?? 0,
     );
   }
 
@@ -663,8 +736,14 @@ class DashboardKpi {
 class ActiveTripMapItem {
   final String id;
   final String reference;
+  final String? driverId;
+  /// Pickup coordinates — fixed for the life of the trip.
   final double lat;
   final double lng;
+  /// The driver's live position, if a driver_location event has arrived
+  /// yet over the dispatch WebSocket; null falls back to the pickup point.
+  final double? vehicleLat;
+  final double? vehicleLng;
   final String driverName;
   final String patientName;
   final String pickup;
@@ -675,8 +754,11 @@ class ActiveTripMapItem {
   ActiveTripMapItem({
     required this.id,
     required this.reference,
+    this.driverId,
     required this.lat,
     required this.lng,
+    this.vehicleLat,
+    this.vehicleLng,
     required this.driverName,
     required this.patientName,
     required this.pickup,
@@ -690,8 +772,9 @@ class ActiveTripMapItem {
         id: (j['id'] ?? '').toString(),
         reference: j['reference'] as String? ??
             (j['id'] ?? '').toString().substring(0, 8).toUpperCase(),
-        lat: _toDouble(j['current_latitude'] ?? j['lat'] ?? 0),
-        lng: _toDouble(j['current_longitude'] ?? j['lng'] ?? 0),
+        driverId: (j['driver'] ?? j['driver_id'])?.toString(),
+        lat: _toDouble(j['pickup_latitude'] ?? j['lat'] ?? 0),
+        lng: _toDouble(j['pickup_longitude'] ?? j['lng'] ?? 0),
         driverName: j['driver_name'] as String? ??
             j['driverName'] as String? ??
             j['driver_email'] as String? ??
@@ -708,6 +791,27 @@ class ActiveTripMapItem {
         vehiclePlate: j['vehicle_plate'] as String? ??
             j['vehiclePlate'] as String? ??
             '',
+      );
+
+  ActiveTripMapItem copyWith({
+    double? vehicleLat,
+    double? vehicleLng,
+    String? status,
+  }) =>
+      ActiveTripMapItem(
+        id: id,
+        reference: reference,
+        driverId: driverId,
+        lat: lat,
+        lng: lng,
+        vehicleLat: vehicleLat ?? this.vehicleLat,
+        vehicleLng: vehicleLng ?? this.vehicleLng,
+        driverName: driverName,
+        patientName: patientName,
+        pickup: pickup,
+        dropoff: dropoff,
+        status: status ?? this.status,
+        vehiclePlate: vehiclePlate,
       );
 }
 
@@ -741,21 +845,6 @@ class AdminUser {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-int? _ageFromDob(String? dob) {
-  if (dob == null || dob.isEmpty) return null;
-  try {
-    final d = DateTime.parse(dob);
-    final now = DateTime.now();
-    int age = now.year - d.year;
-    if (now.month < d.month || (now.month == d.month && now.day < d.day)) {
-      age--;
-    }
-    return age < 0 ? 0 : age;
-  } catch (_) {
-    return null;
-  }
-}
 
 List<String>? _parseNeeds(dynamic v) {
   if (v == null) return null;

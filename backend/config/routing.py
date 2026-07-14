@@ -1,6 +1,6 @@
 from django.urls import re_path
 
-from apps.trips.consumers import TripConsumer
+from apps.trips.consumers import DispatchConsumer, TripConsumer
 from apps.drivers.consumers import DriverLocationConsumer
 from apps.notifications.consumers import NotificationConsumer
 
@@ -11,4 +11,6 @@ websocket_urlpatterns = [
     re_path(r"^ws/driver/location/$", DriverLocationConsumer.as_asgi()),
     # Personal notification channel per user
     re_path(r"^ws/notifications/$", NotificationConsumer.as_asgi()),
+    # Dispatch-wide feed for admin_web's live map (all active trips/drivers)
+    re_path(r"^ws/dispatch/$", DispatchConsumer.as_asgi()),
 ]

@@ -80,7 +80,7 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
               DataTable2<Patient>(
                 columns: const [
                   DataColumn2(label: 'Patient', key: 'patient', width: 200),
-                  DataColumn2(label: 'Age', key: 'age', width: 70, hideOnSmall: true),
+                  DataColumn2(label: 'Gender', key: 'gender', width: 70, hideOnSmall: true),
                   DataColumn2(label: 'Address', key: 'address', width: 200, hideOnSmall: true),
                   DataColumn2(label: 'Special Needs', key: 'needs', width: 150, hideOnSmall: true),
                   DataColumn2(label: 'Registered', key: 'registered', width: 120, hideOnSmall: true),
@@ -103,7 +103,7 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
                               fontSize: 11, color: AppTheme.textMuted)),
                     ]),
                   ]),
-                  p.age != null ? '${p.age} · ${p.gender ?? ""}' : '—',
+                  p.gender ?? '—',
                   (p.address != null && p.address!.isNotEmpty)
                       ? p.address!
                       : (p.email ?? '—'),

@@ -32,10 +32,8 @@ enum ViewKey {
   vehicleEdit,
   billingInvoices,
   invoiceDetail,
-  paymentsPending,
   reportsTrips,
   reportsDrivers,
-  reportsRevenue,
   notificationsBroadcast,
   settingsProfile,
   settingsConfig,
@@ -107,13 +105,8 @@ final List<NavSection> navSections = [
     items: [
       const NavItem(
         icon: Icons.receipt_rounded,
-        label: 'Invoices',
+        label: 'Finance',
         key: ViewKey.billingInvoices,
-      ),
-      const NavItem(
-        icon: Icons.hourglass_top_rounded,
-        label: 'Pending Payments',
-        key: ViewKey.paymentsPending,
       ),
     ],
   ),
@@ -129,11 +122,6 @@ final List<NavSection> navSections = [
         icon: Icons.people_rounded,
         label: 'Drivers Report',
         key: ViewKey.reportsDrivers,
-      ),
-      const NavItem(
-        icon: Icons.attach_money_rounded,
-        label: 'Revenue',
-        key: ViewKey.reportsRevenue,
       ),
     ],
   ),

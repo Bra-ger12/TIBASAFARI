@@ -1,3 +1,6 @@
+// ignore_for_file: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
+
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
@@ -94,8 +97,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             Text(p.name,
                 style: const TextStyle(
                     fontSize: 16, fontWeight: FontWeight.bold)),
-            Text(
-                '${p.age != null ? "${p.age} yrs" : "—"} · ${p.gender ?? "—"}',
+            Text(p.gender ?? '—',
                 style: const TextStyle(
                     fontSize: 12, color: AppTheme.textMuted)),
             const SizedBox(height: 16),
@@ -132,7 +134,100 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       .toList(),
                 ),
         ),
+        const SizedBox(height: 16),
+        SectionCard(
+          title: 'Medical Information',
+          child: _medicalInfo(p),
+        ),
+        const SizedBox(height: 16),
+        SectionCard(
+          title: 'Medical Documents',
+          child: p.documents.isEmpty
+              ? const Text('No documents uploaded yet.',
+                  style: TextStyle(fontSize: 13, color: AppTheme.textMuted))
+              : Column(
+                  children:
+                      p.documents.map((doc) => _buildDocumentRow(doc)).toList(),
+                ),
+        ),
       ],
+    );
+  }
+
+  Widget _medicalInfo(Patient p) {
+    final flags = <String>[
+      if (p.oxygenRequired) 'Oxygen Required',
+      if (p.medicalEscortRequired) 'Medical Escort Required',
+      if (p.ivDripRequired) 'IV Drip Required',
+    ];
+    final hasNotes = p.medicalNotes != null && p.medicalNotes!.isNotEmpty;
+    if (flags.isEmpty && !hasNotes) {
+      return const Text('No medical information recorded.',
+          style: TextStyle(fontSize: 13, color: AppTheme.textMuted));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (flags.isNotEmpty)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: flags
+                .map((f) => Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(f,
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFFB91C1C))),
+                    ))
+                .toList(),
+          ),
+        if (flags.isNotEmpty && hasNotes) const SizedBox(height: 12),
+        if (hasNotes)
+          Text(p.medicalNotes!, style: const TextStyle(fontSize: 13)),
+      ],
+    );
+  }
+
+  Widget _buildDocumentRow(PatientDocument doc) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            doc.docTypeDisplay.isNotEmpty ? doc.docTypeDisplay : doc.docType,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          if (doc.description.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(doc.description,
+                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+          ],
+          if (doc.fileUrl != null) ...[
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () => html.window.open(doc.fileUrl!, '_blank'),
+              child: const Text('View document',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.primary,
+                      decoration: TextDecoration.underline)),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

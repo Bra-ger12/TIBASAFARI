@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -85,6 +86,32 @@ class TripApiService {
       Map<String, dynamic> fields) async {
     final resp = await _patch('/patients/profiles/me/', fields);
     return (resp['data'] as Map<String, dynamic>?) ?? {};
+  }
+
+  Future<List<Map<String, dynamic>>> fetchPatientDocuments() async {
+    final resp = await _get('/patients/profiles/documents/');
+    return _extractList(resp).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> uploadPatientDocument({
+    required String docType,
+    required File file,
+    String description = '',
+  }) async {
+    final resp = await sendWithAuth((token) async {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_base/patients/profiles/documents/'),
+      )
+        ..headers['Accept'] = 'application/json'
+        ..fields['doc_type'] = docType
+        ..fields['description'] = description;
+      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+      final streamed = await request.send();
+      return http.Response.fromStream(streamed);
+    });
+    return _parse(resp);
   }
 
   /// GET the account-level profile (full_name, email, phone).
@@ -322,11 +349,24 @@ class TripApiService {
       totalTrips = (profile['trips_count'] as int?) ?? totalTrips;
     } catch (_) {}
 
+    // "Time Saved" = cumulative time spent on completed trips — the hours
+    // this patient didn't have to spend arranging or waiting for transport
+    // themselves, sourced from each trip's real duration_minutes.
+    double completedMinutes = 0;
+    for (final raw in rawList) {
+      final t = raw as Map<String, dynamic>;
+      if ((t['status'] as String? ?? '').toUpperCase() == 'COMPLETED') {
+        completedMinutes += (t['duration_minutes'] as num?)?.toDouble() ?? 0;
+      }
+    }
+    final hoursSaved = completedMinutes / 60;
+
     return {
       'totalTrips': totalTrips,
       'tripsThisMonth': tripsThisMonth,
       'upcomingTrips': upcoming,
       'recentTrips': recent,
+      'timeSaved': '${hoursSaved.toStringAsFixed(1)} hr',
       'allTrips':
           rawList.map((t) => mapTripForDisplay(t as Map<String, dynamic>)).toList(),
     };
@@ -382,6 +422,7 @@ class TripApiService {
       'estimated_fare': t['estimated_fare'],
       'distance_km': t['distance_km'],
       'duration_minutes': t['duration_minutes'],
+      'driver_name': t['driver_name'],
     };
   }
 

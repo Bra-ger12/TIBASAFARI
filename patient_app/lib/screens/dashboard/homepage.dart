@@ -141,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen>
         tripsThisMonth: data['tripsThisMonth'] as int?,
         upcomingTrips: data['upcomingTrips'] as List<dynamic>?,
         recentTrips: data['recentTrips'] as List<dynamic>?,
+        timeSaved: data['timeSaved'] as String?,
       );
       await AuthSession.save(updated);
       setState(() => _session = updated);
@@ -1081,6 +1082,43 @@ class _UpcomingTripCard extends StatelessWidget {
                   pickup: trip['pickup'] ?? 'Loading...',
                   destination: trip['destination'] ?? 'Loading...',
                 ),
+                if ((trip['driver_name'] as String?)?.isNotEmpty ?? false) ...[
+                  const Padding(
+                    padding: EdgeInsets.only(top: 16),
+                    child: Divider(color: cDivider, height: 1),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.person_rounded, size: 15, color: cMutedLight),
+                            const SizedBox(width: 8),
+                            Text(
+                              trip['driver_name'] as String,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                color: cMuted,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (trip['estimated_fare'] != null)
+                          Text(
+                            'TSh ${(num.tryParse(trip['estimated_fare'].toString()) ?? 0).toStringAsFixed(0)}',
+                            style: AppFonts.sora(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: cTealDeep,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
                 const Padding(
                   padding: EdgeInsets.only(top: 16),
                   child: Divider(color: cDivider, height: 1),

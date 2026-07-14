@@ -41,7 +41,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         'totalTrips': profile['trips_count'] ?? tripItems.length,
         'completedTrips': completedCount,
         'avgRating': profile['rating'] ?? 0,
-        'totalRevenue': 0,
+        'totalRevenue': profile['revenue'] ?? 0,
       },
     };
   }

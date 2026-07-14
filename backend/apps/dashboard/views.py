@@ -1,12 +1,43 @@
+from datetime import timedelta
+
+from django.db.models import Sum
+from django.utils import timezone
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
+from apps.billing.models import Payment
 from apps.core.responses import success_response
 from apps.drivers.models import DriverProfile
 from apps.patients.models import PatientProfile
 from apps.rbac.permissions import RBACPermission
 from apps.trips.models import Trip
 from apps.trips.serializers import TripSerializer
+
+
+def _revenue_stats():
+    """Revenue actually collected (Payment.processed_at is set the moment a
+    payment is confirmed COMPLETED — see InvoiceService.record_payment /
+    verify_payment), compared day-over-day."""
+    today = timezone.localdate()
+    yesterday = today - timedelta(days=1)
+    completed = Payment.objects.filter(status=Payment.Status.COMPLETED)
+    revenue_today = completed.filter(processed_at__date=today).aggregate(
+        total=Sum("amount")
+    )["total"] or 0
+    revenue_yesterday = completed.filter(processed_at__date=yesterday).aggregate(
+        total=Sum("amount")
+    )["total"] or 0
+    if revenue_yesterday:
+        trend_pct = round(
+            float((revenue_today - revenue_yesterday) / revenue_yesterday * 100), 1
+        )
+    else:
+        trend_pct = 100.0 if revenue_today else 0.0
+    return {
+        "today": revenue_today,
+        "yesterday": revenue_yesterday,
+        "trend_pct": trend_pct,
+    }
 
 
 class DashboardStatsView(APIView):
@@ -41,6 +72,7 @@ class DashboardStatsView(APIView):
                 "completed": Trip.objects.filter(status=Trip.Status.COMPLETED).count(),
                 "cancelled": Trip.objects.filter(status=Trip.Status.CANCELLED).count(),
             },
+            "revenue": _revenue_stats(),
         }
         return success_response(data)
 

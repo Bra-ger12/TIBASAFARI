@@ -6,4 +6,5 @@ class DashboardStatsSerializer(serializers.Serializer):
     drivers = serializers.DictField()
     patients = serializers.DictField()
     trips = serializers.DictField()
+    revenue = serializers.DictField()
 

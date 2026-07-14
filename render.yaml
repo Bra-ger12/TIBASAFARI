@@ -46,7 +46,25 @@ services:
       - key: REFRESH_TOKEN_LIFETIME_DAYS
         value: "14"
       - key: EMAIL_BACKEND
-        value: "django.core.mail.backends.console.EmailBackend"
+        value: "django.core.mail.backends.smtp.EmailBackend"
+      - key: EMAIL_HOST
+        value: "smtp.gmail.com"
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "True"
+      - key: EMAIL_HOST_USER
+        value: "braytonroger@gmail.com"
+      # Gmail App Password (not the account password) — a secret, so it's
+      # never committed here. Set it manually in the Render dashboard:
+      # Environment → tibasafari-backend → EMAIL_HOST_PASSWORD.
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      # Gmail's SMTP relay rejects/flags mail whose From address doesn't
+      # match the authenticated account — must be EMAIL_HOST_USER, not the
+      # unowned noreply@tibasafari.com default.
+      - key: DEFAULT_FROM_EMAIL
+        value: "Tiba Safari <braytonroger@gmail.com>"
       # Comma-separated Apple Sign In client IDs (App ID / Services ID) for
       # patient_app's "Continue with Apple" login. Set the real value in the
       # Render dashboard once registered in the Apple Developer portal —

@@ -37,3 +37,33 @@ class PatientProfile(models.Model):
     def __str__(self) -> str:
         return f"PatientProfile({self.user.email})"
 
+
+class PatientDocument(models.Model):
+    """A medical document (record, prescription, insurance card, etc.)
+    uploaded by a patient, viewable by staff on the patient's profile."""
+
+    class DocType(models.TextChoices):
+        MEDICAL_RECORD = "MEDICAL_RECORD", "Medical Record"
+        INSURANCE_CARD = "INSURANCE_CARD", "Insurance Card"
+        PRESCRIPTION = "PRESCRIPTION", "Prescription"
+        OTHER = "OTHER", "Other"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(
+        PatientProfile,
+        related_name="documents",
+        on_delete=models.CASCADE,
+    )
+    doc_type = models.CharField(
+        max_length=30, choices=DocType.choices, default=DocType.MEDICAL_RECORD
+    )
+    file = models.FileField(upload_to="patient_documents/%Y/%m/")
+    description = models.CharField(max_length=255, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-uploaded_at",)
+
+    def __str__(self) -> str:
+        return f"PatientDocument({self.patient_id}, {self.doc_type})"
+

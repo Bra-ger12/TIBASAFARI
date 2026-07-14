@@ -2,10 +2,28 @@ from django.db import transaction
 from rest_framework import serializers
 
 from apps.accounts.models import User
-from apps.patients.models import PatientProfile
+from apps.patients.models import PatientDocument, PatientProfile
 from apps.patients.services import get_or_create_patient_role
 from apps.rbac.models import UserRole
 from apps.trips.models import Trip
+
+
+class PatientDocumentSerializer(serializers.ModelSerializer):
+    doc_type_display = serializers.CharField(
+        source="get_doc_type_display", read_only=True
+    )
+
+    class Meta:
+        model = PatientDocument
+        fields = (
+            "id",
+            "doc_type",
+            "doc_type_display",
+            "file",
+            "description",
+            "uploaded_at",
+        )
+        read_only_fields = ("id", "doc_type_display", "uploaded_at")
 
 
 class PatientProfileSerializer(serializers.ModelSerializer):
@@ -13,6 +31,7 @@ class PatientProfileSerializer(serializers.ModelSerializer):
     user_full_name = serializers.CharField(source="user.full_name", read_only=True)
     user_phone = serializers.CharField(source="user.phone", read_only=True)
     trips_count = serializers.SerializerMethodField()
+    documents = serializers.SerializerMethodField()
 
     class Meta:
         model = PatientProfile
@@ -32,6 +51,7 @@ class PatientProfileSerializer(serializers.ModelSerializer):
             "iv_drip_required",
             "default_pickup_address",
             "trips_count",
+            "documents",
             "created_at",
             "updated_at",
         )
@@ -41,6 +61,7 @@ class PatientProfileSerializer(serializers.ModelSerializer):
             "user_full_name",
             "user_phone",
             "trips_count",
+            "documents",
             "created_at",
             "updated_at",
         )
@@ -48,6 +69,11 @@ class PatientProfileSerializer(serializers.ModelSerializer):
     def get_trips_count(self, obj):
         from apps.trips.models import Trip
         return Trip.objects.filter(patient=obj.user).count()
+
+    def get_documents(self, obj):
+        return PatientDocumentSerializer(
+            obj.documents.all(), many=True, context=self.context
+        ).data
 
     def validate_user(self, value):
         queryset = PatientProfile.objects.filter(user=value)

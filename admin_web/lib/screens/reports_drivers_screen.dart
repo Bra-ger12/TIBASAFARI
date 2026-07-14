@@ -34,10 +34,12 @@ class _ReportsDriversScreenState extends State<ReportsDriversScreen> {
               'vehicle': d['vehicle_registration'] ?? '',
               'rating': d['rating'] ?? 0,
               'totalTrips': d['trips_count'] ?? 0,
-              'completedTrips': d['trips_count'] ?? 0,
-              'revenue': 0,
+              'completedTrips': d['completed_trips_count'] ?? 0,
+              'revenue': d['revenue'] ?? 0,
               'distance': 0,
-              'acceptanceRate': 0,
+              // null = no assign/accept/reject decisions recorded yet for
+              // this driver (acceptance rate isn't retroactively known).
+              'acceptanceRate': d['acceptance_rate'],
               'licenseNumber': d['license_number'] ?? '',
               'id': d['id'] ?? '',
             })
@@ -67,7 +69,9 @@ class _ReportsDriversScreenState extends State<ReportsDriversScreen> {
                           'CompletedTrips': d['completedTrips'],
                           'Revenue': d['revenue'],
                           'DistanceKm': d['distance'],
-                          'AcceptanceRate': d['acceptanceRate'],
+                          'AcceptanceRate': d['acceptanceRate'] == null
+                              ? 'N/A'
+                              : '${d['acceptanceRate']}%',
                         })
                     .toList());
           },
@@ -132,21 +136,26 @@ class _ReportsDriversScreenState extends State<ReportsDriversScreen> {
                       DataCell(Text(
                           formatCurrency((d['revenue'] as num).toDouble()),
                           style: const TextStyle(fontWeight: FontWeight.w600))),
-                      DataCell(Row(children: [
-                        SizedBox(
-                          width: 40,
-                          child: LinearProgressIndicator(
-                            value:
-                                (d['acceptanceRate'] as num).toDouble() / 100,
-                            backgroundColor: const Color(0xFFF1F5F9),
-                            color: AppTheme.primary,
-                            minHeight: 6,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text('${d['acceptanceRate']}%',
-                            style: const TextStyle(fontSize: 11)),
-                      ])),
+                      DataCell(d['acceptanceRate'] == null
+                          ? const Text('N/A',
+                              style: TextStyle(
+                                  fontSize: 11, color: AppTheme.textMuted))
+                          : Row(children: [
+                              SizedBox(
+                                width: 40,
+                                child: LinearProgressIndicator(
+                                  value: (d['acceptanceRate'] as num)
+                                          .toDouble() /
+                                      100,
+                                  backgroundColor: const Color(0xFFF1F5F9),
+                                  color: AppTheme.primary,
+                                  minHeight: 6,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text('${d['acceptanceRate']}%',
+                                  style: const TextStyle(fontSize: 11)),
+                            ])),
                     ]);
                   }).toList(),
                 ),

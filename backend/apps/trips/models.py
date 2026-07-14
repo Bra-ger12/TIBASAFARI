@@ -168,6 +168,35 @@ class Trip(models.Model):
         }
 
 
+class TripAssignmentEvent(models.Model):
+    """Records each assign/accept/reject decision for a driver on a trip, so
+    a driver's trip-acceptance rate can be computed later. Trip.status only
+    holds the *current* state, so a reassignment after a rejection would
+    otherwise leave no trace of who declined it."""
+
+    class EventType(models.TextChoices):
+        ASSIGNED = "ASSIGNED", "Assigned"
+        ACCEPTED = "ACCEPTED", "Accepted"
+        REJECTED = "REJECTED", "Rejected"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    trip = models.ForeignKey(Trip, related_name="assignment_events", on_delete=models.CASCADE)
+    driver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="trip_assignment_events",
+        on_delete=models.CASCADE,
+    )
+    event_type = models.CharField(max_length=10, choices=EventType.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=("driver", "event_type"))]
+
+    def __str__(self) -> str:
+        return f"TripAssignmentEvent({self.trip_id}, {self.driver_id}, {self.event_type})"
+
+
 class TripMessage(models.Model):
     """A single chat message exchanged between the driver, patient, and dispatch on a trip."""
 

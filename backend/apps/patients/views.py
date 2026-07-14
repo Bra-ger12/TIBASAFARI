@@ -1,5 +1,6 @@
 from rest_framework import exceptions, filters, mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -10,10 +11,11 @@ from apps.accounts.services import EmailOTPService
 from apps.accounts.social_auth import verify_apple_id_token, verify_google_id_token
 from apps.core.responses import success_response
 from apps.core.throttles import EmailOTPRequestThrottle
-from apps.patients.models import PatientProfile
+from apps.patients.models import PatientDocument, PatientProfile
 from apps.patients.serializers import (
     AppleAuthSerializer,
     GoogleAuthSerializer,
+    PatientDocumentSerializer,
     PatientProfileSerializer,
     PatientSignupSerializer,
     PatientTripRequestSerializer,
@@ -111,6 +113,7 @@ class PatientProfileViewSet(viewsets.ModelViewSet):
         "destroy": "manage_patients",
         "me": "view_own_trips",
         "trip_history": "view_own_trips",
+        "documents": "view_own_trips",
     }
 
     def get_queryset(self):
@@ -149,6 +152,31 @@ class PatientProfileViewSet(viewsets.ModelViewSet):
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return success_response(serializer.data)
+
+    @action(
+        detail=False,
+        methods=["get", "post"],
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
+    )
+    def documents(self, request):
+        profile = PatientProfile.objects.get(user=request.user)
+        if request.method == "POST":
+            serializer = PatientDocumentSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            doc = PatientDocument.objects.create(
+                patient=profile, **serializer.validated_data
+            )
+            return success_response(
+                PatientDocumentSerializer(doc, context=self.get_serializer_context()).data,
+                "Document uploaded",
+                status=status.HTTP_201_CREATED,
+            )
+        docs = profile.documents.all()
+        return success_response(
+            PatientDocumentSerializer(
+                docs, many=True, context=self.get_serializer_context()
+            ).data
+        )
 
 
 class PatientTripRequestViewSet(

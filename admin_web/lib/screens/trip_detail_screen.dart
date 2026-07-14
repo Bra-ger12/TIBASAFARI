@@ -5,6 +5,8 @@ import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/format.dart';
+import '../services/trip_room_ws_service.dart';
+import '../widgets/live_map.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/shared.dart';
 import '../widgets/nav.dart';
@@ -18,11 +20,35 @@ class TripDetailScreen extends StatefulWidget {
 
 class _TripDetailScreenState extends State<TripDetailScreen> {
   late Future<Map<String, dynamic>> _future;
+  double? _vehicleLat;
+  double? _vehicleLng;
+  StreamSubscription<Map<String, double>>? _locationSub;
+
   @override
   void initState() {
     super.initState();
     _future = _load();
+    final tripId = widget.nav.selectedTripId;
+    if (tripId != null) {
+      TripRoomWsService.instance.connect(tripId);
+      _locationSub =
+          TripRoomWsService.instance.locationStream.listen((pos) {
+        if (!mounted) return;
+        setState(() {
+          _vehicleLat = pos['lat'];
+          _vehicleLng = pos['lng'];
+        });
+      });
+    }
   }
+
+  @override
+  void dispose() {
+    _locationSub?.cancel();
+    TripRoomWsService.instance.disconnect();
+    super.dispose();
+  }
+
   Future<Map<String, dynamic>> _load() async {
     return ApiService.get('/trips/${widget.nav.selectedTripId}/');
   }
@@ -68,38 +94,72 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   }
 
   Widget _left(Trip t) {
-    return SectionCard(
-      title: 'Route & Timing',
-      child: LayoutBuilder(builder: (context, c) {
-        final cols = c.maxWidth > 500 ? 2 : 1;
-        return GridView.count(
-          crossAxisCount: cols,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 3.2,
-          children: [
-            InfoRow(label: 'Pickup', value: Text(t.pickup)),
-            InfoRow(label: 'Drop-off', value: Text(t.dropoff)),
-            InfoRow(
-                label: 'Started',
-                value: Text(formatDate(t.startedAt, withTime: true))),
-            InfoRow(
-                label: 'Ended',
-                value: Text(t.endedAt != null
-                    ? formatDate(t.endedAt!, withTime: true)
-                    : 'In progress')),
-            InfoRow(
-                label: 'Distance',
-                value: Text('${t.distanceKm} km')),
-            InfoRow(
-                label: 'Fare',
-                value: Text(formatCurrency(t.fare),
-                    style: const TextStyle(fontWeight: FontWeight.w600))),
-          ],
-        );
-      }),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (t.pickupLat != 0 || t.pickupLng != 0) ...[
+          SectionCard(
+            title: 'Live Location',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: LiveMap(
+                trips: [
+                  ActiveTripMapItem(
+                    id: t.id,
+                    reference: t.reference,
+                    driverId: t.driverId,
+                    lat: t.pickupLat,
+                    lng: t.pickupLng,
+                    vehicleLat: _vehicleLat,
+                    vehicleLng: _vehicleLng,
+                    driverName: t.driverName,
+                    patientName: t.patientName,
+                    pickup: t.pickup,
+                    dropoff: t.dropoff,
+                    status: t.status,
+                    vehiclePlate: t.vehicle?.plate ?? '',
+                  ),
+                ],
+                height: 280,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        SectionCard(
+          title: 'Route & Timing',
+          child: LayoutBuilder(builder: (context, c) {
+            final cols = c.maxWidth > 500 ? 2 : 1;
+            return GridView.count(
+              crossAxisCount: cols,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 3.2,
+              children: [
+                InfoRow(label: 'Pickup', value: Text(t.pickup)),
+                InfoRow(label: 'Drop-off', value: Text(t.dropoff)),
+                InfoRow(
+                    label: 'Started',
+                    value: Text(formatDate(t.startedAt, withTime: true))),
+                InfoRow(
+                    label: 'Ended',
+                    value: Text(t.endedAt != null
+                        ? formatDate(t.endedAt!, withTime: true)
+                        : 'In progress')),
+                InfoRow(
+                    label: 'Distance',
+                    value: Text('${t.distanceKm} km')),
+                InfoRow(
+                    label: 'Fare',
+                    value: Text(formatCurrency(t.fare),
+                        style: const TextStyle(fontWeight: FontWeight.w600))),
+              ],
+            );
+          }),
+        ),
+      ],
     );
   }
 

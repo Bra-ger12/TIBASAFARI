@@ -182,7 +182,7 @@ class _TrackRideScreenState extends State<TrackRideScreen>
         position: _driverLatLng!,
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
         infoWindow: InfoWindow(
-          title: _driverName ?? 'Driver',
+          title: _driverName ?? 'Not assigned',
           snippet: _vehicleLabel,
         ),
       ),
@@ -295,7 +295,7 @@ class _TrackRideScreenState extends State<TrackRideScreen>
   // ── Driver Card ─────────────────────────────────────────────────────────────
 
   Widget _buildDriverCard() {
-    final name = _driverName ?? 'Driver';
+    final name = _driverName ?? 'Not assigned';
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -590,7 +590,7 @@ class _TrackRideScreenState extends State<TrackRideScreen>
         builder: (_) => TripChatScreen(
           tripId: id,
           currentUserId: _currentUserId ?? '',
-          driverName: _driverName ?? 'Driver',
+          driverName: _driverName ?? 'Not assigned',
         ),
       ),
     );
