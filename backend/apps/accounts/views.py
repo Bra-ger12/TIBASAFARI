@@ -2,6 +2,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import exceptions, status, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import EmailOTP, User
@@ -21,6 +22,16 @@ from apps.accounts.services import AuthService, EmailOTPService, UserService
 from apps.core.responses import success_response
 from apps.core.throttles import EmailOTPRequestThrottle
 from apps.rbac.permissions import HasPermission
+
+
+def _blacklist_all_tokens(user):
+    """Ends every other session after a password change/reset — without
+    this, a stolen/leaked password's existing refresh tokens kept working
+    indefinitely even after the legitimate owner changed it. Access tokens
+    already in use still work until they naturally expire (see
+    ACCESS_TOKEN_LIFETIME_MINUTES); only refresh tokens are blacklisted."""
+    for token in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=token)
 
 
 class LoginView(APIView):
@@ -69,6 +80,7 @@ class ChangePasswordView(APIView):
         serializer.is_valid(raise_exception=True)
         request.user.set_password(serializer.validated_data["new_password"])
         request.user.save(update_fields=["password"])
+        _blacklist_all_tokens(request.user)
         return success_response(message="Password changed successfully")
 
 
@@ -112,6 +124,7 @@ class PasswordResetConfirmView(APIView):
             raise exceptions.ValidationError("Invalid or expired code")
         user.set_password(data["new_password"])
         user.save(update_fields=["password"])
+        _blacklist_all_tokens(user)
         return success_response(message="Password reset successfully")
 
 
