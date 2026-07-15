@@ -223,3 +223,47 @@ class EmptyState extends StatelessWidget {
     );
   }
 }
+
+class ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const ErrorState({super.key, required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFEF2F2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.error_outline_rounded,
+                color: Color(0xFFDC2626), size: 24),
+          ),
+          const SizedBox(height: 8),
+          const Text('Couldn\'t load this page',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}

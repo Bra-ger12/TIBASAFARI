@@ -35,6 +35,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     return {'patient': profile, 'trips': tripItems};
   }
 
+  void _reload() {
+    setState(() => _future = _load());
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>>(
@@ -42,6 +46,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
           return const LoadingRows();
+        }
+        if (snap.hasError || snap.data == null) {
+          return ErrorState(message: '${snap.error ?? 'Unknown error'}', onRetry: _reload);
         }
         final p = Patient.fromJson(snap.data!['patient'] as Map<String, dynamic>);
         final trips = (snap.data!['trips'] as List)

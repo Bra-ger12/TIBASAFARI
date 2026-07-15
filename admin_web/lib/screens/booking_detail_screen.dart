@@ -86,6 +86,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         if (snap.connectionState != ConnectionState.done) {
           return const LoadingRows();
         }
+        if (snap.hasError || snap.data == null) {
+          return ErrorState(message: '${snap.error ?? 'Unknown error'}', onRetry: _reload);
+        }
         final b = Booking.fromJson(snap.data!);
         final meta = bookingStatus(b.status);
         final canAct = b.status == 'pending' || b.status == 'approved';

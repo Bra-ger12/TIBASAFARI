@@ -114,6 +114,12 @@ class _ReportsTripsScreenState extends State<ReportsTripsScreen> {
           if (snap.connectionState != ConnectionState.done) {
             return const LoadingRows();
           }
+          if (snap.hasError || snap.data == null) {
+            return ErrorState(
+              message: '${snap.error ?? 'Unknown error'}',
+              onRetry: () => setState(() => _future = _load()),
+            );
+          }
           final summary = snap.data!;
           final trips = (snap.data!['trips'] as List)
               .map((e) => Trip.fromJson(e as Map<String, dynamic>))

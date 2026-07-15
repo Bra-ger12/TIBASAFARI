@@ -61,6 +61,12 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         if (snap.connectionState != ConnectionState.done) {
           return const LoadingRows();
         }
+        if (snap.hasError || snap.data == null) {
+          return ErrorState(
+            message: '${snap.error ?? 'Unknown error'}',
+            onRetry: () => setState(() => _future = _load()),
+          );
+        }
         // The response is the trip dict directly (ApiService unwraps the envelope).
         final t = Trip.fromJson(snap.data!);
         final meta = tripStatus(t.status);

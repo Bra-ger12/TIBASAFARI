@@ -46,6 +46,10 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     };
   }
 
+  void _reload() {
+    setState(() => _future = _load());
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>>(
@@ -53,6 +57,9 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
           return const LoadingRows();
+        }
+        if (snap.hasError || snap.data == null) {
+          return ErrorState(message: '${snap.error ?? 'Unknown error'}', onRetry: _reload);
         }
         final d = Driver.fromJson(snap.data!['driver'] as Map<String, dynamic>);
         final trips = (snap.data!['trips'] as List)

@@ -61,6 +61,12 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         if (snap.connectionState != ConnectionState.done) {
           return const LoadingRows();
         }
+        if (snap.hasError || snap.data == null) {
+          return ErrorState(
+            message: '${snap.error ?? 'Unknown error'}',
+            onRetry: () => setState(() => _future = _load()),
+          );
+        }
         // ApiService unwraps the envelope, so snap.data is the invoice dict directly.
         final inv = Invoice.fromJson(snap.data!);
         final meta = invoiceStatus(inv.status);
