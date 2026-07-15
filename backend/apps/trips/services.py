@@ -136,6 +136,7 @@ class TripService:
         if trip.status not in {Trip.Status.REQUESTED, Trip.Status.CANCELLED}:
             raise exceptions.ValidationError("Only requested trips can be assigned")
         self._assert_driver_verified(driver)
+        self._assert_driver_available(driver)
         trip.driver = driver
         trip.status = Trip.Status.ASSIGNED
         trip.save(update_fields=["driver", "status", "updated_at"])
@@ -145,6 +146,9 @@ class TripService:
         )
 
         profile = getattr(driver, "driver_profile", None)
+        if profile is not None:
+            profile.is_available = False
+            profile.save(update_fields=["is_available", "updated_at"])
         vehicle = getattr(profile, "vehicle", None) if profile else None
         vehicle_desc = (
             f"{vehicle.make} {vehicle.model} ({vehicle.registration_number})"
@@ -207,6 +211,7 @@ class TripService:
         trip.driver = None
         trip.status = Trip.Status.REQUESTED
         trip.save(update_fields=["driver", "status", "updated_at"])
+        self._mark_driver_available(driver)
         _push_trip_status(trip)
         _notify(
             trip.patient,
@@ -312,6 +317,7 @@ class TripService:
             update_fields += ["final_fare", "final_fare_breakdown"]
 
         trip.save(update_fields=update_fields)
+        self._mark_driver_available(driver)
         _push_trip_status(trip)
 
         # Auto-generate the invoice the moment a trip completes — without
@@ -345,6 +351,8 @@ class TripService:
         trip.status = Trip.Status.CANCELLED
         trip.cancelled_at = timezone.now()
         trip.save(update_fields=["status", "cancelled_at", "updated_at"])
+        if trip.driver_id:
+            self._mark_driver_available(trip.driver)
         _push_trip_status(trip)
         if trip.driver_id:
             _notify(
@@ -410,6 +418,19 @@ class TripService:
                 "Driver cannot be dispatched: missing verified documents "
                 f"({', '.join(sorted(missing))})"
             )
+
+    def _assert_driver_available(self, driver):
+        profile = getattr(driver, "driver_profile", None)
+        if profile is not None and not profile.is_available:
+            raise exceptions.ValidationError(
+                "Driver is not available (already on another trip)"
+            )
+
+    def _mark_driver_available(self, driver):
+        profile = getattr(driver, "driver_profile", None)
+        if profile is not None and not profile.is_available:
+            profile.is_available = True
+            profile.save(update_fields=["is_available", "updated_at"])
 
     def _assert_participant(self, trip, user):
         from apps.rbac.permissions import has_permission

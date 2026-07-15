@@ -65,7 +65,9 @@ def test_assign_driver_rejects_driver_with_unverified_documents():
 def test_assign_driver_succeeds_with_all_documents_verified():
     patient = _make_user("patient5@example.com")
     driver = _make_user("driver5@example.com")
-    profile = DriverProfile.objects.create(user=driver, license_number="LIC-5")
+    profile = DriverProfile.objects.create(
+        user=driver, license_number="LIC-5", is_available=True
+    )
     for doc_type in (
         DriverDocument.DocType.LICENSE,
         DriverDocument.DocType.INSURANCE,
@@ -83,3 +85,87 @@ def test_assign_driver_succeeds_with_all_documents_verified():
 
     assert result.status == Trip.Status.ASSIGNED
     assert result.driver_id == driver.id
+
+
+def _make_verified_driver(email, license_number):
+    driver = _make_user(email)
+    profile = DriverProfile.objects.create(
+        user=driver, license_number=license_number, is_available=True
+    )
+    for doc_type in (
+        DriverDocument.DocType.LICENSE,
+        DriverDocument.DocType.INSURANCE,
+        DriverDocument.DocType.VEHICLE_REGISTRATION,
+    ):
+        DriverDocument.objects.create(
+            driver=profile,
+            doc_type=doc_type,
+            file=f"driver_documents/2026/01/{doc_type}.pdf",
+            status=DriverDocument.Status.VERIFIED,
+        )
+    return driver, profile
+
+
+@pytest.mark.django_db
+def test_assign_driver_rejects_driver_already_unavailable():
+    patient = _make_user("patient10@example.com")
+    driver, profile = _make_verified_driver("driver10@example.com", "LIC-10")
+    profile.is_available = False
+    profile.save(update_fields=["is_available"])
+    trip = _make_trip(patient)
+
+    with pytest.raises(exceptions.ValidationError):
+        TripService().assign_driver(trip, driver=driver)
+
+
+@pytest.mark.django_db
+def test_assign_driver_marks_driver_unavailable():
+    patient = _make_user("patient11@example.com")
+    driver, profile = _make_verified_driver("driver11@example.com", "LIC-11")
+    trip = _make_trip(patient)
+
+    TripService().assign_driver(trip, driver=driver)
+
+    profile.refresh_from_db()
+    assert profile.is_available is False
+
+
+@pytest.mark.django_db
+def test_reject_trip_restores_driver_availability():
+    patient = _make_user("patient12@example.com")
+    driver, profile = _make_verified_driver("driver12@example.com", "LIC-12")
+    trip = _make_trip(patient)
+    TripService().assign_driver(trip, driver=driver)
+
+    TripService().reject_trip(trip, driver=driver)
+
+    profile.refresh_from_db()
+    assert profile.is_available is True
+
+
+@pytest.mark.django_db
+def test_complete_trip_restores_driver_availability():
+    patient = _make_user("patient13@example.com")
+    driver, profile = _make_verified_driver("driver13@example.com", "LIC-13")
+    trip = _make_trip(patient)
+    TripService().assign_driver(trip, driver=driver)
+    TripService().accept_trip(trip, driver=driver)
+    TripService().start_trip(trip, driver=driver)
+
+    TripService().complete_trip(trip, driver=driver, distance_km=5, duration_minutes=10)
+
+    profile.refresh_from_db()
+    assert profile.is_available is True
+
+
+@pytest.mark.django_db
+def test_cancel_trip_restores_driver_availability():
+    patient = _make_user("patient14@example.com")
+    driver, profile = _make_verified_driver("driver14@example.com", "LIC-14")
+    trip = _make_trip(patient)
+    TripService().assign_driver(trip, driver=driver)
+
+    TripService().cancel_trip(trip, user=patient)
+
+    profile.refresh_from_db()
+    assert profile.is_available is True
