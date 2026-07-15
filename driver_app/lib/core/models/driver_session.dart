@@ -57,6 +57,7 @@ class DriverAssignedTrip {
   final double? destLatitude;
   final double? destLongitude;
   final double? estimatedFare;
+  final double? finalFare;
   final DateTime? completedAt;
 
   const DriverAssignedTrip({
@@ -74,8 +75,13 @@ class DriverAssignedTrip {
     this.destLatitude,
     this.destLongitude,
     this.estimatedFare,
+    this.finalFare,
     this.completedAt,
   });
+
+  /// The real completed fare when available, falling back to the
+  /// pre-booking estimate for trips still in progress.
+  double? get fare => finalFare ?? estimatedFare;
 
   DriverAssignedTrip copyWith({
     String? id,
@@ -92,6 +98,7 @@ class DriverAssignedTrip {
     double? destLatitude,
     double? destLongitude,
     double? estimatedFare,
+    double? finalFare,
     DateTime? completedAt,
   }) {
     return DriverAssignedTrip(
@@ -109,6 +116,7 @@ class DriverAssignedTrip {
       destLatitude: destLatitude ?? this.destLatitude,
       destLongitude: destLongitude ?? this.destLongitude,
       estimatedFare: estimatedFare ?? this.estimatedFare,
+      finalFare: finalFare ?? this.finalFare,
       completedAt: completedAt ?? this.completedAt,
     );
   }
@@ -129,6 +137,7 @@ class DriverAssignedTrip {
         'destination_latitude': destLatitude,
         'destination_longitude': destLongitude,
         'estimated_fare': estimatedFare,
+        'final_fare': finalFare,
         'completed_at': completedAt?.toIso8601String(),
       };
 
@@ -154,6 +163,7 @@ class DriverAssignedTrip {
       destLatitude: (json['destination_latitude'] as num?)?.toDouble(),
       destLongitude: (json['destination_longitude'] as num?)?.toDouble(),
       estimatedFare: (json['estimated_fare'] as num?)?.toDouble(),
+      finalFare: (json['final_fare'] as num?)?.toDouble(),
       completedAt: DateTime.tryParse(json['completed_at']?.toString() ?? ''),
     );
   }

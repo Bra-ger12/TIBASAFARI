@@ -411,7 +411,7 @@ class ApiDriverDataSource implements DriverDataSource {
         .where((trip) =>
             trip.completedAt != null &&
             _datePrefix(trip.completedAt!.toLocal()) == todayPrefix)
-        .fold<double>(0, (sum, trip) => sum + (trip.estimatedFare ?? 0));
+        .fold<double>(0, (sum, trip) => sum + (trip.fare ?? 0));
 
     return DriverSession(
       uid: (user['id'] ?? profile['user'] ?? '').toString(),
@@ -473,6 +473,7 @@ class ApiDriverDataSource implements DriverDataSource {
       destLatitude: _doubleValue(json['destination_latitude']),
       destLongitude: _doubleValue(json['destination_longitude']),
       estimatedFare: _doubleValue(json['estimated_fare']),
+      finalFare: _doubleValue(json['final_fare']),
       completedAt: DateTime.tryParse(_stringValue(json['completed_at']) ?? ''),
     );
   }
