@@ -45,27 +45,13 @@ class _BookingsPendingScreenState extends State<BookingsPendingScreen> {
     } catch (_) {}
   }
 
-  Future<void> _approve(Booking b) async {
-    setState(() => _actionLoading = true);
-    try {
-      await ApiService.patch('/trips/${b.id}/', {'status': 'ASSIGNED'});
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Trip ${b.reference} approved')));
-      _reload();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('$e')));
-    } finally {
-      if (mounted) setState(() => _actionLoading = false);
-    }
-  }
-
   Future<void> _cancel(Booking b) async {
     setState(() => _actionLoading = true);
     try {
-      await ApiService.patch('/trips/${b.id}/', {'status': 'CANCELLED'});
+      // Goes through the real cancel action (TripService.cancel_trip) so
+      // driver availability is restored and notifications/WS pushes fire —
+      // a raw PATCH would bypass all of that.
+      await ApiService.post('/trips/${b.id}/cancel/', {});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Trip ${b.reference} cancelled')));
@@ -113,6 +99,9 @@ class _BookingsPendingScreenState extends State<BookingsPendingScreen> {
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const LoadingRows();
+          }
+          if (snap.hasError) {
+            return ErrorState(message: '${snap.error}', onRetry: _reload);
           }
           final all = snap.data ?? [];
           final filtered = _needsFilter == null
@@ -187,17 +176,6 @@ class _BookingsPendingScreenState extends State<BookingsPendingScreen> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Tooltip(
-                        message: 'Approve',
-                        child: IconButton(
-                          onPressed: _actionLoading ? null : () => _approve(b),
-                          icon: const Icon(Icons.check, size: 16),
-                          color: AppTheme.primary,
-                          constraints: const BoxConstraints(
-                              minWidth: 28, minHeight: 28),
-                          padding: EdgeInsets.zero,
-                        ),
-                      ),
                       Tooltip(
                         message: 'Assign driver',
                         child: IconButton(

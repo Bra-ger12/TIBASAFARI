@@ -85,6 +85,12 @@ class _ReportsDriversScreenState extends State<ReportsDriversScreen> {
           if (snap.connectionState != ConnectionState.done) {
             return const LoadingRows();
           }
+          if (snap.hasError) {
+            return ErrorState(
+              message: '${snap.error}',
+              onRetry: () => setState(() => _future = _load()),
+            );
+          }
           final drivers = snap.data ?? [];
           return SectionCard(
             title: 'Driver Performance',

@@ -27,9 +27,7 @@ class _BookingsAllScreenState extends State<BookingsAllScreen> {
   }
 
   Future<List<Booking>> _load() async {
-    final path = _status == 'all'
-        ? '/trips/'
-        : '/trips/?status=${_status.toUpperCase()}';
+    final path = _status == 'all' ? '/trips/' : '/trips/?status=$_status';
     final items = await ApiService.list(path);
     return items.map(Booking.fromJson).toList();
   }
@@ -51,6 +49,9 @@ class _BookingsAllScreenState extends State<BookingsAllScreen> {
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const LoadingRows();
+          }
+          if (snap.hasError) {
+            return ErrorState(message: '${snap.error}', onRetry: _reload);
           }
           var rows = snap.data ?? [];
           if (_search.isNotEmpty) {
@@ -125,12 +126,13 @@ class _BookingsAllScreenState extends State<BookingsAllScreen> {
         underline: const SizedBox(),
         items: const [
           DropdownMenuItem(value: 'all', child: Text('All statuses')),
-          DropdownMenuItem(value: 'pending', child: Text('Pending')),
-          DropdownMenuItem(value: 'approved', child: Text('Approved')),
-          DropdownMenuItem(value: 'assigned', child: Text('Assigned')),
-          DropdownMenuItem(value: 'ongoing', child: Text('Ongoing')),
-          DropdownMenuItem(value: 'completed', child: Text('Completed')),
-          DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
+          DropdownMenuItem(value: 'REQUESTED', child: Text('Requested')),
+          DropdownMenuItem(value: 'ASSIGNED', child: Text('Assigned')),
+          DropdownMenuItem(value: 'ACCEPTED', child: Text('Accepted')),
+          DropdownMenuItem(value: 'EN_ROUTE', child: Text('En Route')),
+          DropdownMenuItem(value: 'ARRIVED', child: Text('Arrived')),
+          DropdownMenuItem(value: 'COMPLETED', child: Text('Completed')),
+          DropdownMenuItem(value: 'CANCELLED', child: Text('Cancelled')),
         ],
         onChanged: (v) {
           if (v == null) return;

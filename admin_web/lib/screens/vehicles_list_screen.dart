@@ -58,6 +58,12 @@ class _VehiclesListScreenState extends State<VehiclesListScreen> {
           if (snap.connectionState != ConnectionState.done) {
             return const LoadingRows();
           }
+          if (snap.hasError) {
+            return ErrorState(
+              message: '${snap.error}',
+              onRetry: () => setState(() => _future = _load()),
+            );
+          }
           var rows = snap.data ?? [];
           if (_search.isNotEmpty) {
             final q = _search.toLowerCase();

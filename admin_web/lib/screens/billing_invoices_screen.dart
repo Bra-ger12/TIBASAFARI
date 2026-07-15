@@ -63,6 +63,9 @@ class _BillingInvoicesScreenState extends State<BillingInvoicesScreen> {
           if (snap.connectionState != ConnectionState.done) {
             return const LoadingRows();
           }
+          if (snap.hasError) {
+            return ErrorState(message: '${snap.error}', onRetry: _reload);
+          }
           final data = snap.data ?? _FinanceData.empty();
           final invoices = data.invoices;
           final collected = invoices
@@ -290,7 +293,10 @@ class _BillingInvoicesScreenState extends State<BillingInvoicesScreen> {
         underline: const SizedBox(),
         items: const [
           DropdownMenuItem(value: 'all', child: Text('All invoices')),
-          DropdownMenuItem(value: 'unpaid', child: Text('Unpaid')),
+          // Backend's "unpaid, awaiting payment" state is ISSUED — there is
+          // no UNPAID status, so this used to send an invalid filter value
+          // and always return zero results.
+          DropdownMenuItem(value: 'issued', child: Text('Unpaid')),
           DropdownMenuItem(
               value: 'partially_paid', child: Text('Partially Paid')),
           DropdownMenuItem(value: 'paid', child: Text('Paid')),

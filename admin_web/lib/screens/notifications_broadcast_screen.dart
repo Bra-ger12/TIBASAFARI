@@ -196,6 +196,12 @@ class _NotificationsBroadcastScreenState
                 height: 200,
                 child: Center(child: CircularProgressIndicator()));
           }
+          if (snap.hasError) {
+            return ErrorState(
+              message: '${snap.error}',
+              onRetry: () => setState(() => _future = _load()),
+            );
+          }
           final list = snap.data ?? [];
           if (list.isEmpty) {
             return const EmptyState(

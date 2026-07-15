@@ -24,10 +24,14 @@ class _TripsAllScreenState extends State<TripsAllScreen> {
     super.initState();
     _future = _load();
   }
+  static const _activeStatuses = 'REQUESTED,ASSIGNED,ACCEPTED,EN_ROUTE,ARRIVED';
+
   Future<List<Trip>> _load() async {
-    final path = _status == 'all'
-        ? '/trips/'
-        : '/trips/?status=${_status.toUpperCase()}';
+    final path = switch (_status) {
+      'all' => '/trips/',
+      'active' => '/trips/?status=$_activeStatuses',
+      _ => '/trips/?status=${_status.toUpperCase()}',
+    };
     final items = await ApiService.list(path);
     return items.map(Trip.fromJson).toList();
   }
@@ -43,6 +47,12 @@ class _TripsAllScreenState extends State<TripsAllScreen> {
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const LoadingRows();
+          }
+          if (snap.hasError) {
+            return ErrorState(
+              message: '${snap.error}',
+              onRetry: () => setState(() => _future = _load()),
+            );
           }
           var rows = snap.data ?? [];
           if (_search.isNotEmpty) {

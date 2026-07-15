@@ -63,7 +63,12 @@ class TripViewSet(viewsets.ModelViewSet):
         )
         status_value = self.request.query_params.get("status")
         if status_value:
-            queryset = queryset.filter(status=status_value)
+            # admin_web's Active Trips screen passes a comma-separated list
+            # (e.g. "ASSIGNED,ACCEPTED,EN_ROUTE,ARRIVED") — an exact-match
+            # filter on that literal joined string never matches any trip,
+            # so always split and use __in even for a single value.
+            statuses = [s.strip() for s in status_value.split(",") if s.strip()]
+            queryset = queryset.filter(status__in=statuses)
         if has_permission(self.request.user, "manage_trips"):
             return queryset
         if has_permission(self.request.user, "view_assigned_trips"):
