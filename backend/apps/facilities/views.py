@@ -1,5 +1,6 @@
 import math
 
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from apps.core.geo import haversine_distance_km
@@ -20,6 +21,13 @@ class FacilitySearchView(APIView):
     region. Replaces the Google Places "Select Hospital" picker, which
     needs billing we don't have enabled.
     """
+
+    # Only ever called from patient_app's post-login destination picker
+    # (book_ride.dart, facility_search_screen.dart) — IsAuthenticated is the
+    # actual intended behavior, declared explicitly rather than relying on
+    # DRF's global default so it's clear at a glance, matching every other
+    # view in this codebase.
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         query = request.query_params.get("q", "").strip()
@@ -47,6 +55,8 @@ class FacilityNearbyView(APIView):
     A lat/lng bounding-box pre-filter (indexed) keeps this from scanning
     every row before computing exact distance.
     """
+
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:

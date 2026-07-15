@@ -1,6 +1,7 @@
 from django.utils import timezone
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 
 from apps.core.responses import success_response
 from apps.notifications.models import Broadcast, Notification, NotificationPreference
@@ -15,6 +16,11 @@ from apps.rbac.permissions import RBACPermission
 
 class NotificationViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
+    # get_queryset already scopes to the requesting user (unless
+    # staff/superuser), so IsAuthenticated was already the effective
+    # behavior via DRF's global default — declared explicitly here to match
+    # every other view in this codebase.
+    permission_classes = [IsAuthenticated]
     service = NotificationService()
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "message"]
