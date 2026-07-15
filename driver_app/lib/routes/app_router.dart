@@ -6,8 +6,6 @@ import '../screens/dashboard/notifications_screen.dart';
 import '../screens/earnings/earnings_screen.dart';
 import '../screens/profile/driver_profile_screen.dart';
 import '../screens/splash/splash_screen.dart';
-import '../screens/trips/active_trip_screen.dart';
-import '../screens/trips/assinged_trip.dart';
 import '../screens/trips/trip_detail_screen.dart';
 import '../screens/trips/trip_history_screen.dart';
 import '../core/models/driver_session.dart';
@@ -33,20 +31,6 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (_) =>
               DriverHomeScreen(session: session ?? DriverSession.empty),
-        );
-
-      case AppRoutes.assignedTrips:
-        final session = settings.arguments as DriverSession?;
-        return MaterialPageRoute(
-          builder: (_) =>
-              DriverDashboardScreen(session: session ?? DriverSession.empty),
-        );
-
-      case AppRoutes.activeTrip:
-        final session = settings.arguments as DriverSession?;
-        return MaterialPageRoute(
-          builder: (_) =>
-              ActiveTripScreen(session: session ?? DriverSession.empty),
         );
 
       case AppRoutes.tripHistory:

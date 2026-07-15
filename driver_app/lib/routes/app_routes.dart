@@ -4,8 +4,6 @@ class AppRoutes {
   static const String signup = '/signup';
   static const String home = '/home';
   static const String driverHome = home;
-  static const String assignedTrips = '/assigned-trips';
-  static const String activeTrip = '/active-trip';
   static const String tripHistory = '/trip-history';
   static const String tripDetail = '/trip-detail';
   static const String earnings = '/earnings';
@@ -17,8 +15,6 @@ class AppRoutes {
     login: 'Login',
     signup: 'Driver Signup',
     home: 'Driver Home',
-    assignedTrips: 'Assigned Trips',
-    activeTrip: 'Active Trip',
     tripHistory: 'Trip History',
     tripDetail: 'Trip Details',
     earnings: 'Earnings',
