@@ -109,6 +109,39 @@ def test_wrong_or_expired_code_rejected():
 
 
 @pytest.mark.django_db
+def test_code_locked_out_after_max_wrong_attempts():
+    """Regression test: verify() used to have no cap on wrong guesses for a
+    still-valid code — a 6-digit code could be brute-forced given enough
+    attempts within its 30-minute validity window."""
+    client = APIClient()
+    client.post(reverse("patient-signup"), PATIENT_SIGNUP, format="json")
+    user = User.objects.get(email=PATIENT_SIGNUP["email"])
+    otp = EmailOTP.objects.get(user=user, purpose=EmailOTP.Purpose.VERIFY_EMAIL)
+
+    for _ in range(5):
+        response = client.post(
+            reverse("verify-email"),
+            {"email": PATIENT_SIGNUP["email"], "code": "000000"},
+            format="json",
+        )
+        assert response.status_code == 400
+
+    otp.refresh_from_db()
+    assert otp.attempts == 5
+
+    # Even the real code is now rejected — the code is locked out, not just
+    # the specific wrong guesses.
+    correct_response = client.post(
+        reverse("verify-email"),
+        {"email": PATIENT_SIGNUP["email"], "code": otp.code},
+        format="json",
+    )
+    assert correct_response.status_code == 400
+    user.refresh_from_db()
+    assert user.is_email_verified is False
+
+
+@pytest.mark.django_db
 def test_code_cannot_be_reused_after_verification():
     client = APIClient()
     client.post(reverse("patient-signup"), PATIENT_SIGNUP, format="json")

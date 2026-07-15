@@ -73,6 +73,7 @@ class EmailOTP(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     consumed_at = models.DateTimeField(null=True, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         ordering = ("-created_at",)

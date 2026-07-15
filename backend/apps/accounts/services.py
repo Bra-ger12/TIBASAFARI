@@ -11,6 +11,7 @@ from apps.accounts.models import EmailOTP
 from apps.accounts.repositories import UserRepository
 
 _OTP_TTL_MINUTES = 30
+_MAX_OTP_ATTEMPTS = 5
 
 
 class EmailOTPService:
@@ -28,14 +29,22 @@ class EmailOTPService:
         return code
 
     def verify(self, user, *, purpose: str, code: str) -> bool:
+        # Looked up by user+purpose only (not code) so a wrong guess still
+        # resolves to the active OTP row and can count against its attempt
+        # limit — filtering by code here would mean a guess simply matches
+        # nothing, and nothing would ever track how many times it was tried.
         otp = (
-            EmailOTP.objects.filter(
-                user=user, purpose=purpose, code=code, consumed_at__isnull=True
-            )
+            EmailOTP.objects.filter(user=user, purpose=purpose, consumed_at__isnull=True)
             .order_by("-created_at")
             .first()
         )
         if otp is None or not otp.is_valid:
+            return False
+        if otp.attempts >= _MAX_OTP_ATTEMPTS:
+            return False
+        if otp.code != code:
+            otp.attempts += 1
+            otp.save(update_fields=["attempts"])
             return False
         otp.consumed_at = timezone.now()
         otp.save(update_fields=["consumed_at"])
