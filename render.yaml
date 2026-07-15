@@ -17,8 +17,14 @@ services:
         generateValue: true
       - key: ALLOWED_HOSTS
         value: ".onrender.com"
+      # Left empty: settings.py already auto-derives the correct
+      # https://<RENDER_EXTERNAL_HOSTNAME> trusted origin from the hostname
+      # Render injects at runtime. A wildcard here (https://*.onrender.com)
+      # would trust CSRF requests whose Origin is *any* onrender.com tenant
+      # — onrender.com is shared hosting, so that includes apps other
+      # people control, not just ours.
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://*.onrender.com"
+        value: ""
       - key: CORS_ALLOWED_ORIGINS
         value: ""
       # admin_web has no fixed origin yet (flutter run -d chrome picks a
