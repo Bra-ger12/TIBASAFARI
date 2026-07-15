@@ -15,8 +15,6 @@ abstract class DriverDataSource {
     required String password,
   });
 
-  Future<DriverSession> loginWithGoogle({required String idToken});
-
   Future<void> signupDriver({
     required String fullName,
     required String phoneNumber,
@@ -52,6 +50,8 @@ abstract class DriverDataSource {
     required String tripId,
     double? distanceKm,
     int? durationMinutes,
+    File? signature,
+    File? proofPhoto,
   });
 
   Future<Map<String, dynamic>> updateUserProfile(Map<String, dynamic> fields);
@@ -125,35 +125,6 @@ class ApiDriverDataSource implements DriverDataSource {
 
     // Return a minimal session from the login response.
     // The home screen loads the full profile and trips separately via fetchSession().
-    return _minimalSession(user is Map<String, dynamic> ? user : const {});
-  }
-
-  @override
-  Future<DriverSession> loginWithGoogle({required String idToken}) async {
-    final response = await _request(
-      'POST',
-      '/drivers/auth/google/',
-      body: {'id_token': idToken},
-      authenticated: false,
-    );
-    final data = _unwrapMap(response);
-    final accessToken = data['access'] as String?;
-    final user = data['user'];
-
-    if (accessToken == null || accessToken.isEmpty) {
-      throw Exception('Google sign-in succeeded without an access token');
-    }
-    if (user is Map<String, dynamic> && !_hasDriverAccess(user)) {
-      throw Exception('This account is not registered as a driver');
-    }
-
-    _accessToken = accessToken;
-    await AuthStorage.instance.saveTokens(
-      accessToken: accessToken,
-      refreshToken: data['refresh'] as String?,
-      userId: user is Map<String, dynamic> ? user['id']?.toString() : null,
-    );
-
     return _minimalSession(user is Map<String, dynamic> ? user : const {});
   }
 
@@ -260,14 +231,39 @@ class ApiDriverDataSource implements DriverDataSource {
     required String tripId,
     double? distanceKm,
     int? durationMinutes,
+    File? signature,
+    File? proofPhoto,
   }) async {
-    final body = <String, dynamic>{
-      'distance_km': ?distanceKm,
-      'duration_minutes': ?durationMinutes,
-    };
-    final response =
-        await _request('POST', '/trips/$tripId/complete/', body: body);
-    return _tripFromJson(_unwrapMap(response));
+    final token = _requireToken();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_baseUrl/trips/$tripId/complete/'),
+    )
+      ..headers['Authorization'] = 'Bearer $token'
+      ..headers['Accept'] = 'application/json';
+    if (distanceKm != null) {
+      request.fields['distance_km'] = distanceKm.toString();
+    }
+    if (durationMinutes != null) {
+      request.fields['duration_minutes'] = durationMinutes.toString();
+    }
+    if (signature != null) {
+      request.files.add(await http.MultipartFile.fromPath('signature', signature.path));
+    }
+    if (proofPhoto != null) {
+      request.files.add(await http.MultipartFile.fromPath('proof_photo', proofPhoto.path));
+    }
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_errorMessage(response));
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Unexpected API response');
+    }
+    return _tripFromJson(_unwrapMap(decoded));
   }
 
   @override
@@ -536,7 +532,7 @@ class ApiDriverDataSource implements DriverDataSource {
       if (await _refreshAccessToken()) {
         response = await attempt(_accessToken);
       } else {
-        throw Exception('Your session has expired. Please sign in again.');
+        throw Exception('Your session has expired. Please login again.');
       }
     }
 

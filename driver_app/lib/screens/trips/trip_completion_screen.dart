@@ -1,4 +1,9 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/models/driver_session.dart';
 import '../../core/theme/colors.dart';
@@ -25,6 +30,10 @@ class _TripCompletionScreenState extends State<TripCompletionScreen> {
   late final TextEditingController _distanceCtrl;
   late final TextEditingController _durationCtrl;
 
+  final GlobalKey _signatureBoundaryKey = GlobalKey();
+  final List<Offset?> _signaturePoints = [];
+  File? _proofPhoto;
+
   bool _isSubmitting = false;
   String? _error;
 
@@ -48,6 +57,29 @@ class _TripCompletionScreenState extends State<TripCompletionScreen> {
     super.dispose();
   }
 
+  Future<File?> _exportSignature() async {
+    if (_signaturePoints.isEmpty) return null;
+    final boundary = _signatureBoundaryKey.currentContext?.findRenderObject()
+        as RenderRepaintBoundary?;
+    if (boundary == null) return null;
+    final image = await boundary.toImage(pixelRatio: 2.0);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) return null;
+    final file = File(
+      '${Directory.systemTemp.path}/signature_${DateTime.now().millisecondsSinceEpoch}.png',
+    );
+    return file.writeAsBytes(byteData.buffer.asUint8List());
+  }
+
+  Future<void> _capturePhoto() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _proofPhoto = File(picked.path));
+  }
+
   Future<void> _submit() async {
     setState(() {
       _isSubmitting = true;
@@ -55,10 +87,13 @@ class _TripCompletionScreenState extends State<TripCompletionScreen> {
     });
 
     try {
+      final signatureFile = await _exportSignature();
       await DriverService.instance.completeTrip(
         tripId: widget.trip.id,
         distanceKm: double.tryParse(_distanceCtrl.text.trim()),
         durationMinutes: int.tryParse(_durationCtrl.text.trim()),
+        signature: signatureFile,
+        proofPhoto: _proofPhoto,
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -87,6 +122,10 @@ class _TripCompletionScreenState extends State<TripCompletionScreen> {
                     _buildTripSummary(),
                     const SizedBox(height: 20),
                     _buildMetricsRow(),
+                    const SizedBox(height: 20),
+                    _buildProofPhotoSection(),
+                    const SizedBox(height: 20),
+                    _buildSignatureSection(),
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       _buildErrorBanner(_error!),
@@ -221,6 +260,96 @@ class _TripCompletionScreenState extends State<TripCompletionScreen> {
     );
   }
 
+  Widget _buildProofPhotoSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cSurface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Proof of Drop-off (optional)',
+              style: AppFonts.sora(fontSize: 14, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          if (_proofPhoto != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.file(_proofPhoto!, height: 160, width: double.infinity, fit: BoxFit.cover),
+            ),
+          if (_proofPhoto != null) const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _capturePhoto,
+            icon: Icon(_proofPhoto == null ? Icons.photo_camera_rounded : Icons.replay_rounded, size: 18),
+            label: Text(_proofPhoto == null ? 'Take Photo' : 'Retake Photo'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: cTealDark,
+              side: const BorderSide(color: cBorder),
+              minimumSize: const Size.fromHeight(44),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSignatureSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cSurface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Patient Signature (optional)',
+                  style: AppFonts.sora(fontSize: 14, fontWeight: FontWeight.w800)),
+              TextButton(
+                onPressed: _signaturePoints.isEmpty
+                    ? null
+                    : () => setState(() => _signaturePoints.clear()),
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          RepaintBoundary(
+            key: _signatureBoundaryKey,
+            child: Container(
+              height: 160,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cBorder),
+              ),
+              child: GestureDetector(
+                onPanStart: (details) {
+                  setState(() => _signaturePoints.add(details.localPosition));
+                },
+                onPanUpdate: (details) {
+                  setState(() => _signaturePoints.add(details.localPosition));
+                },
+                onPanEnd: (_) => setState(() => _signaturePoints.add(null)),
+                child: CustomPaint(
+                  painter: _SignaturePainter(_signaturePoints),
+                  size: Size.infinite,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildErrorBanner(String message) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -261,4 +390,27 @@ class _TripCompletionScreenState extends State<TripCompletionScreen> {
       ),
     );
   }
+}
+
+class _SignaturePainter extends CustomPainter {
+  final List<Offset?> points;
+  _SignaturePainter(this.points);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = cText
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < points.length - 1; i++) {
+      final p1 = points[i];
+      final p2 = points[i + 1];
+      if (p1 != null && p2 != null) {
+        canvas.drawLine(p1, p2, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SignaturePainter oldDelegate) => true;
 }
