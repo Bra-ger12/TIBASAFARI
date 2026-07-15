@@ -56,7 +56,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             .map(Trip.fromJson)
             .toList();
         final totalSpent = trips
-            .where((t) => t.status == 'completed')
+            .where((t) => t.status == 'COMPLETED')
             .fold(0.0, (s, t) => s + t.fare);
         return PageScaffold(
           title: p.name,

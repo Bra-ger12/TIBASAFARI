@@ -88,19 +88,26 @@ class StatusMeta {
   const StatusMeta(this.label, this.tone);
 }
 
+// Booking and Trip both wrap the backend's Trip resource, whose `status`
+// is one of Trip.Status's uppercase values (REQUESTED, ASSIGNED, ACCEPTED,
+// EN_ROUTE, ARRIVED, COMPLETED, CANCELLED) — these switches used to be
+// written against lowercase/invented values that never matched, so every
+// booking/trip status badge fell through to the plain-grey default.
 StatusMeta bookingStatus(String s) {
   switch (s) {
-    case 'pending':
-      return const StatusMeta('Pending', StatusTone.amber);
-    case 'approved':
-      return const StatusMeta('Approved', StatusTone.blue);
-    case 'assigned':
+    case 'REQUESTED':
+      return const StatusMeta('Requested', StatusTone.amber);
+    case 'ASSIGNED':
       return const StatusMeta('Assigned', StatusTone.blue);
-    case 'ongoing':
-      return const StatusMeta('Ongoing', StatusTone.blue);
-    case 'completed':
+    case 'ACCEPTED':
+      return const StatusMeta('Accepted', StatusTone.blue);
+    case 'EN_ROUTE':
+      return const StatusMeta('En Route', StatusTone.blue);
+    case 'ARRIVED':
+      return const StatusMeta('Arrived', StatusTone.blue);
+    case 'COMPLETED':
       return const StatusMeta('Completed', StatusTone.green);
-    case 'cancelled':
+    case 'CANCELLED':
       return const StatusMeta('Cancelled', StatusTone.red);
     default:
       return StatusMeta(s, StatusTone.slate);
@@ -109,11 +116,19 @@ StatusMeta bookingStatus(String s) {
 
 StatusMeta tripStatus(String s) {
   switch (s) {
-    case 'active':
-      return const StatusMeta('Active', StatusTone.blue);
-    case 'completed':
+    case 'REQUESTED':
+      return const StatusMeta('Requested', StatusTone.amber);
+    case 'ASSIGNED':
+      return const StatusMeta('Assigned', StatusTone.blue);
+    case 'ACCEPTED':
+      return const StatusMeta('Accepted', StatusTone.blue);
+    case 'EN_ROUTE':
+      return const StatusMeta('En Route', StatusTone.blue);
+    case 'ARRIVED':
+      return const StatusMeta('Arrived', StatusTone.blue);
+    case 'COMPLETED':
       return const StatusMeta('Completed', StatusTone.green);
-    case 'cancelled':
+    case 'CANCELLED':
       return const StatusMeta('Cancelled', StatusTone.red);
     default:
       return StatusMeta(s, StatusTone.slate);
@@ -135,16 +150,27 @@ StatusMeta paymentStatus(String s) {
   }
 }
 
+// Invoice.status from the model is already .toLowerCase()'d from the
+// backend's uppercase Invoice.Status choices (DRAFT, ISSUED, PAID,
+// PARTIALLY_PAID, OVERDUE, CANCELLED, REFUNDED) — 'unpaid' was never a
+// real value (the backend's "awaiting payment" state is ISSUED), and
+// draft/cancelled/refunded weren't handled at all.
 StatusMeta invoiceStatus(String s) {
   switch (s) {
-    case 'unpaid':
-      return const StatusMeta('Unpaid', StatusTone.amber);
+    case 'draft':
+      return const StatusMeta('Draft', StatusTone.slate);
+    case 'issued':
+      return const StatusMeta('Issued', StatusTone.amber);
     case 'partially_paid':
       return const StatusMeta('Partially Paid', StatusTone.blue);
     case 'paid':
       return const StatusMeta('Paid', StatusTone.green);
     case 'overdue':
       return const StatusMeta('Overdue', StatusTone.red);
+    case 'cancelled':
+      return const StatusMeta('Cancelled', StatusTone.slate);
+    case 'refunded':
+      return const StatusMeta('Refunded', StatusTone.slate);
     default:
       return StatusMeta(s, StatusTone.slate);
   }
@@ -163,14 +189,19 @@ StatusMeta driverStatus(String s) {
   }
 }
 
+// Vehicle.status is a raw pass-through of the backend's Vehicle.Status
+// choices (available, in_service, maintenance, inactive) — 'on_trip' was
+// never a real value, and in_service/inactive weren't handled at all.
 StatusMeta vehicleStatus(String s) {
   switch (s) {
     case 'available':
       return const StatusMeta('Available', StatusTone.green);
-    case 'on_trip':
-      return const StatusMeta('On Trip', StatusTone.blue);
+    case 'in_service':
+      return const StatusMeta('In Service', StatusTone.blue);
     case 'maintenance':
       return const StatusMeta('Maintenance', StatusTone.amber);
+    case 'inactive':
+      return const StatusMeta('Inactive', StatusTone.slate);
     default:
       return StatusMeta(s, StatusTone.slate);
   }

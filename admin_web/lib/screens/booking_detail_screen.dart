@@ -42,13 +42,17 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     } catch (_) {}
   }
 
-  Future<void> _updateStatus(Booking b, String status, String label) async {
+  Future<void> _cancelBooking(Booking b) async {
     setState(() => _actionLoading = true);
     try {
-      await ApiService.patch('/trips/${b.id}/', {'status': status});
+      // Goes through the real cancel action (TripService.cancel_trip) so
+      // driver availability is restored and notifications/WS pushes fire —
+      // a raw PATCH {'status': 'cancelled'} would both bypass all of that
+      // and be rejected outright, since Trip.status choices are uppercase.
+      await ApiService.post('/trips/${b.id}/cancel/', {});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Trip ${b.reference} $label')));
+          SnackBar(content: Text('Trip ${b.reference} cancelled')));
       _reload();
     } catch (e) {
       if (!mounted) return;
@@ -91,7 +95,13 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         }
         final b = Booking.fromJson(snap.data!);
         final meta = bookingStatus(b.status);
-        final canAct = b.status == 'pending' || b.status == 'approved';
+        // Trip.status values from the backend are uppercase (REQUESTED,
+        // ASSIGNED, ACCEPTED, EN_ROUTE, ARRIVED, COMPLETED, CANCELLED) —
+        // there is no "pending"/"approved" status, so this used to always
+        // evaluate false and the Assign Driver button never rendered.
+        // Assigning a driver is only valid while a trip is still REQUESTED
+        // (see TripService.assign_driver).
+        final canAct = b.status == 'REQUESTED';
         return PageScaffold(
           title: b.reference,
           description: 'Created ${formatDate(b.createdAt, withTime: true)}',
@@ -283,17 +293,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           child: Column(
             children: [
               if (canAct) ...[
-                FilledButton.icon(
-                  onPressed: _actionLoading
-                      ? null
-                      : () => _updateStatus(b, 'approved', 'approved'),
-                  icon: const Icon(Icons.check, size: 16),
-                  label: const Text('Approve Booking'),
-                  style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      minimumSize: const Size.fromHeight(40)),
-                ),
-                const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: _actionLoading
                       ? null
@@ -316,12 +315,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                       minimumSize: const Size.fromHeight(40)),
                 ),
               ],
-              if (b.status != 'completed' && b.status != 'cancelled') ...[
+              if (b.status != 'COMPLETED' && b.status != 'CANCELLED') ...[
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
-                  onPressed: _actionLoading
-                      ? null
-                      : () => _updateStatus(b, 'cancelled', 'cancelled'),
+                  onPressed: _actionLoading ? null : () => _cancelBooking(b),
                   icon: const Icon(Icons.close, size: 16),
                   label: const Text('Cancel Booking'),
                   style: OutlinedButton.styleFrom(
@@ -329,7 +326,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                       minimumSize: const Size.fromHeight(40)),
                 ),
               ],
-              if (b.status == 'completed' || b.status == 'cancelled')
+              if (b.status == 'COMPLETED' || b.status == 'CANCELLED')
                 const Text('No further actions available.',
                     style:
                         TextStyle(fontSize: 12, color: AppTheme.textMuted)),
