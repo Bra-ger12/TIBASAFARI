@@ -22,7 +22,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   late Future<Map<String, dynamic>> _future;
   double? _vehicleLat;
   double? _vehicleLng;
+  String? _liveStatus;
   StreamSubscription<Map<String, double>>? _locationSub;
+  StreamSubscription<String>? _statusSub;
 
   @override
   void initState() {
@@ -39,12 +41,17 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           _vehicleLng = pos['lng'];
         });
       });
+      _statusSub = TripRoomWsService.instance.statusStream.listen((status) {
+        if (!mounted) return;
+        setState(() => _liveStatus = status);
+      });
     }
   }
 
   @override
   void dispose() {
     _locationSub?.cancel();
+    _statusSub?.cancel();
     TripRoomWsService.instance.disconnect();
     super.dispose();
   }
@@ -69,7 +76,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         }
         // The response is the trip dict directly (ApiService unwraps the envelope).
         final t = Trip.fromJson(snap.data!);
-        final meta = tripStatus(t.status);
+        // Prefer the live WS status push over the snapshot fetched at load
+        // time — otherwise this screen never reflects status changes
+        // (accept/start/arrive/complete) until manually reopened.
+        final currentStatus = _liveStatus ?? t.status;
+        final meta = tripStatus(currentStatus);
         return PageScaffold(
           title: t.reference,
           description: 'Started ${formatDate(t.startedAt, withTime: true)}',
@@ -80,7 +91,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           actions: [StatusBadge(tone: meta.tone, label: meta.label, dot: true)],
           child: LayoutBuilder(builder: (context, c) {
             final wide = c.maxWidth > 900;
-            final left = _left(t);
+            final left = _left(t, currentStatus);
             final right = _right(t);
             if (wide) {
               return Row(
@@ -99,7 +110,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
   }
 
-  Widget _left(Trip t) {
+  Widget _left(Trip t, String status) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -122,7 +133,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     patientName: t.patientName,
                     pickup: t.pickup,
                     dropoff: t.dropoff,
-                    status: t.status,
+                    status: status,
                     vehiclePlate: t.vehicle?.plate ?? '',
                   ),
                 ],
