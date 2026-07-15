@@ -4,7 +4,6 @@ import '../screens/auth/driver_reset_password_screen.dart';
 import '../screens/auth/driver_signup.dart';
 import '../screens/dashboard/driver_home_screen.dart';
 import '../screens/dashboard/notifications_screen.dart';
-import '../screens/earnings/earnings_screen.dart';
 import '../screens/profile/driver_profile_screen.dart';
 import '../screens/splash/splash_screen.dart';
 import '../screens/trips/trip_detail_screen.dart';
@@ -59,13 +58,6 @@ class AppRouter {
                     : DriverSession.empty.copyWith(assignedTrips: [trip])),
             tripId: tripId,
           ),
-        );
-
-      case AppRoutes.earnings:
-        final session = settings.arguments as DriverSession?;
-        return MaterialPageRoute(
-          builder: (_) =>
-              EarningsScreen(session: session ?? DriverSession.empty),
         );
 
       case AppRoutes.notifications:

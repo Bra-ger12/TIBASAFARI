@@ -7,7 +7,6 @@ class AppRoutes {
   static const String driverHome = home;
   static const String tripHistory = '/trip-history';
   static const String tripDetail = '/trip-detail';
-  static const String earnings = '/earnings';
   static const String notifications = '/notifications';
   static const String profile = '/profile';
 
@@ -19,7 +18,6 @@ class AppRoutes {
     home: 'Driver Home',
     tripHistory: 'Trip History',
     tripDetail: 'Trip Details',
-    earnings: 'Earnings',
     notifications: 'Notifications',
     profile: 'Driver Profile',
   };
