@@ -166,6 +166,7 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
   bool _showConfirmPassword = false;
   bool _acceptedPolicy = false;
   bool _isSubmitting = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -192,34 +193,59 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
       return;
     }
 
-    setState(() => _isSubmitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 600));
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
 
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
+    try {
+      await ApiService.post('/accounts/signup/', {
+        'full_name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phone_number': _phoneController.text.trim(),
+        'password': _passwordController.text,
+        'confirm_password': _confirmPasswordController.text,
+      });
 
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Account request submitted'),
-        content: const Text(
-          'Your admin account request has been captured for approval. Sign in after your access is activated.',
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Account request submitted'),
+          content: const Text(
+            'Your admin account request has been captured for approval. Sign in after your access is activated.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pushReplacementNamed(context, '/login');
+              },
+              child: const Text('Go to login'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pushReplacementNamed(context, '/login');
-            },
-            child: const Text('Go to login'),
-          ),
-        ],
-      ),
-    );
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _errorMessage = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _errorMessage = 'Unable to connect to server. '
+            'Check that the backend is running and the API URL is correct.';
+      });
+    }
   }
 
   @override
@@ -317,6 +343,10 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
               value: _acceptedPolicy,
               onChanged: (value) => setState(() => _acceptedPolicy = value),
             ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 16),
+              _AuthErrorBanner(message: _errorMessage!),
+            ],
             const SizedBox(height: 24),
             _AuthButton(
               label: 'Submit request',

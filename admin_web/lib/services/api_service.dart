@@ -151,6 +151,7 @@ class ApiService {
           msg = j['detail'] as String? ??
               j['error'] as String? ??
               j['message'] as String? ??
+              _firstFieldError(j) ??
               msg;
         }
       } catch (_) {}
@@ -167,5 +168,16 @@ class ApiService {
         res.statusCode,
       );
     }
+  }
+
+  /// DRF field-validation errors look like `{"email": ["already registered"]}`
+  /// rather than `{"detail": "..."}` — surface the first one so the user sees
+  /// something more useful than a generic "Request failed (400)".
+  static String? _firstFieldError(Map j) {
+    for (final value in j.values) {
+      if (value is List && value.isNotEmpty) return value.first.toString();
+      if (value is String && value.isNotEmpty) return value;
+    }
+    return null;
   }
 }
