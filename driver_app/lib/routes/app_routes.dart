@@ -2,6 +2,7 @@ class AppRoutes {
   static const String splash = '/';
   static const String login = '/login';
   static const String signup = '/signup';
+  static const String resetPassword = '/reset-password';
   static const String home = '/home';
   static const String driverHome = home;
   static const String tripHistory = '/trip-history';
@@ -14,6 +15,7 @@ class AppRoutes {
     splash: 'Splash',
     login: 'Login',
     signup: 'Driver Signup',
+    resetPassword: 'Reset Password',
     home: 'Driver Home',
     tripHistory: 'Trip History',
     tripDetail: 'Trip Details',

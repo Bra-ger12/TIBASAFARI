@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../screens/auth/driver_login.dart';
+import '../screens/auth/driver_reset_password_screen.dart';
 import '../screens/auth/driver_signup.dart';
 import '../screens/dashboard/driver_home_screen.dart';
 import '../screens/dashboard/notifications_screen.dart';
@@ -25,6 +26,9 @@ class AppRouter {
 
       case AppRoutes.signup:
         return MaterialPageRoute(builder: (_) => const DriverSignupScreen());
+
+      case AppRoutes.resetPassword:
+        return MaterialPageRoute(builder: (_) => const DriverResetPasswordScreen());
 
       case AppRoutes.driverHome:
         final session = settings.arguments as DriverSession?;

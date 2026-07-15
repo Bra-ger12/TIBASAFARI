@@ -88,6 +88,22 @@ class DriverService {
     );
   }
 
+  Future<void> requestPasswordReset({required String email}) {
+    return _dataSource.requestPasswordReset(email: email);
+  }
+
+  Future<void> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) {
+    return _dataSource.confirmPasswordReset(
+      email: email,
+      code: code,
+      newPassword: newPassword,
+    );
+  }
+
   Future<DriverSession> fetchSession(String uid) {
     return _dataSource.fetchSession(uid);
   }

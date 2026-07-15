@@ -24,6 +24,14 @@ abstract class DriverDataSource {
     required String confirmPassword,
   });
 
+  Future<void> requestPasswordReset({required String email});
+
+  Future<void> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String newPassword,
+  });
+
   Future<DriverSession> fetchSession(String uid);
 
   Future<List<DriverAssignedTrip>> fetchAssignedTrips(String driverUid);
@@ -147,6 +155,34 @@ class ApiDriverDataSource implements DriverDataSource {
         'license_number': licenseNumber.trim(),
         'password': password,
         'confirm_password': confirmPassword,
+      },
+      authenticated: false,
+    );
+  }
+
+  @override
+  Future<void> requestPasswordReset({required String email}) async {
+    await _request(
+      'POST',
+      '/auth/password-reset/',
+      body: {'email': email.trim().toLowerCase()},
+      authenticated: false,
+    );
+  }
+
+  @override
+  Future<void> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    await _request(
+      'POST',
+      '/auth/password-reset/confirm/',
+      body: {
+        'email': email.trim().toLowerCase(),
+        'code': code.trim(),
+        'new_password': newPassword,
       },
       authenticated: false,
     );

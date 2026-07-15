@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import '../../core/config/social_auth_config.dart';
 import '../../routes/app_routes.dart';
 import '../../services/driver_service.dart';
 
@@ -16,13 +14,6 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _obscure = true;
   bool _loading = false;
-
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: ['email'],
-    serverClientId: SocialAuthConfig.googleServerClientId.isEmpty
-        ? null
-        : SocialAuthConfig.googleServerClientId,
-  );
 
   static const Color cTeal     = Color(0xFF1D9E75);
   static const Color cTealDark = Color(0xFF14754F);
@@ -66,82 +57,8 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
     }
   }
 
-  Future<void> _handleGoogleLogin() async {
-    if (!SocialAuthConfig.googleConfigured) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Google sign-in isn't configured yet.")),
-      );
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      final account = await _googleSignIn.signIn();
-      if (account == null) return; // user cancelled
-      final idToken = (await account.authentication).idToken;
-      if (idToken == null) {
-        throw Exception('Google did not return an identity token.');
-      }
-      final session =
-          await DriverService.instance.loginWithGoogle(idToken: idToken);
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, AppRoutes.driverHome,
-          arguments: session);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
-              style: const TextStyle(fontWeight: FontWeight.w600)),
-          backgroundColor: cError,
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
   void _showForgotPasswordDialog() {
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Reset Password',
-            style: TextStyle(fontWeight: FontWeight.w800)),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Enter your email address to receive a password reset link.'),
-          const SizedBox(height: 16),
-          TextField(
-            controller: ctrl,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              hintText: 'Email address',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (ctrl.text.isNotEmpty) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('Reset link sent to ${ctrl.text}'),
-                  backgroundColor: cTeal,
-                ));
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: cTeal),
-            child: const Text('Send Reset Link',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+    Navigator.pushNamed(context, AppRoutes.resetPassword);
   }
 
   @override
@@ -214,7 +131,7 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
 
                       // Title
                       const Text(
-                        'Sign in to your account',
+                        'Login to your account',
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
@@ -368,7 +285,7 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
                                       color: Colors.white),
                                 )
                               : const Text(
-                                  'Sign In',
+                                  'Login',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,
@@ -379,50 +296,6 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
                       ),
                       const SizedBox(height: 22),
 
-                      // Divider
-                      const Row(children: [
-                        Expanded(child: Divider()),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 10),
-                          child: Text('or',
-                              style: TextStyle(color: cMuted, fontSize: 13)),
-                        ),
-                        Expanded(child: Divider()),
-                      ]),
-                      const SizedBox(height: 18),
-
-                      // Google sign-in
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: cBorder),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(13)),
-                            backgroundColor: const Color(0xFFF8FCFF),
-                          ),
-                          onPressed: _loading ? null : _handleGoogleLogin,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Image.asset(
-                                'assets/images/google_logo.png',
-                                width: 22,
-                                height: 22,
-                                errorBuilder: (_, _, _) =>
-                                    const Icon(Icons.g_mobiledata, size: 22),
-                              ),
-                              const SizedBox(width: 10),
-                              const Text('Continue with Google',
-                                  style: TextStyle(
-                                      color: cInk, fontWeight: FontWeight.w700)),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-
                       // Terms
                       RichText(
                         textAlign: TextAlign.center,
@@ -431,7 +304,7 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
                           children: [
                             TextSpan(
                                 text:
-                                    'By signing in, you agree to our '),
+                                    'By logging in, you agree to our '),
                             TextSpan(
                               text: 'Terms of Service',
                               style: TextStyle(
