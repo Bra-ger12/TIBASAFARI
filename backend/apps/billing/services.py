@@ -15,6 +15,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import exceptions
 
@@ -320,6 +321,7 @@ class InvoiceService:
             notes=notes,
         )
 
+    @transaction.atomic
     def record_payment(
         self,
         invoice: Invoice,
@@ -329,6 +331,7 @@ class InvoiceService:
         reference: str = "",
         recorded_by=None,
     ) -> Payment:
+        invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
         payment = Payment.objects.create(
             invoice=invoice,
             amount=amount,
@@ -348,10 +351,12 @@ class InvoiceService:
         invoice.save(update_fields=["amount_paid", "amount_due", "status", "paid_at", "updated_at"])
         return payment
 
+    @transaction.atomic
     def verify_payment(self, payment: Payment, *, verified_by) -> Payment:
         """Staff confirms a patient's self-reported (submit_payment) payment —
         marks that same Payment row COMPLETED and applies it to the invoice
         balance, instead of record_payment's behaviour of creating a new one."""
+        payment = Payment.objects.select_for_update().get(pk=payment.pk)
         if payment.status != Payment.Status.PENDING:
             raise exceptions.ValidationError("Only pending payments can be verified")
 
@@ -360,7 +365,7 @@ class InvoiceService:
         payment.processed_at = timezone.now()
         payment.save(update_fields=["status", "recorded_by", "processed_at"])
 
-        invoice = payment.invoice
+        invoice = Invoice.objects.select_for_update().get(pk=payment.invoice_id)
         invoice.amount_paid += payment.amount
         invoice.amount_due = max(Decimal("0.00"), invoice.total_amount - invoice.amount_paid)
         if invoice.amount_due == Decimal("0.00"):
