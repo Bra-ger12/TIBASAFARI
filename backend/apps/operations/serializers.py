@@ -49,3 +49,8 @@ class VehicleExpenseSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = ("id", "recorded_by", "recorded_by_name", "created_at")
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than zero")
+        return value
