@@ -151,6 +151,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
   }
 
   Future<void> _acceptTrip(String tripId) async {
+    if (_loading) return;
     setState(() => _loading = true);
     try {
       final updated = await DriverService.instance

@@ -61,6 +61,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     TripAssignmentStatus newStatus,
     String actionName,
   ) async {
+    if (_isLoading) return;
     try {
       setState(() => _isLoading = true);
 
