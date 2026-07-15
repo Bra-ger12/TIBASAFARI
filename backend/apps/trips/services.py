@@ -14,8 +14,15 @@ from django.core.mail import send_mail
 from django.utils import timezone
 from rest_framework import exceptions
 
+from apps.drivers.models import DriverDocument
 from apps.notifications.models import Notification
 from apps.trips.models import Trip, TripAssignmentEvent, TripMessage
+
+REQUIRED_DRIVER_DOC_TYPES = {
+    DriverDocument.DocType.LICENSE,
+    DriverDocument.DocType.INSURANCE,
+    DriverDocument.DocType.VEHICLE_REGISTRATION,
+}
 
 
 def _push_trip_status(trip: "Trip"):
@@ -125,6 +132,7 @@ class TripService:
     def assign_driver(self, trip, *, driver):
         if trip.status not in {Trip.Status.REQUESTED, Trip.Status.CANCELLED}:
             raise exceptions.ValidationError("Only requested trips can be assigned")
+        self._assert_driver_verified(driver)
         trip.driver = driver
         trip.status = Trip.Status.ASSIGNED
         trip.save(update_fields=["driver", "status", "updated_at"])
@@ -369,6 +377,24 @@ class TripService:
     def _assert_driver(self, trip, driver):
         if trip.driver_id != driver.id:
             raise exceptions.PermissionDenied("This trip is not assigned to this driver")
+
+    def _assert_driver_verified(self, driver):
+        profile = getattr(driver, "driver_profile", None)
+        if profile is None:
+            raise exceptions.ValidationError(
+                "Driver has no profile and cannot be dispatched"
+            )
+        verified_types = set(
+            DriverDocument.objects.filter(
+                driver=profile, status=DriverDocument.Status.VERIFIED
+            ).values_list("doc_type", flat=True)
+        )
+        missing = REQUIRED_DRIVER_DOC_TYPES - verified_types
+        if missing:
+            raise exceptions.ValidationError(
+                "Driver cannot be dispatched: missing verified documents "
+                f"({', '.join(sorted(missing))})"
+            )
 
     def _assert_participant(self, trip, user):
         from apps.rbac.permissions import has_permission
