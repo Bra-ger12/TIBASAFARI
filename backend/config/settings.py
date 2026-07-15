@@ -17,9 +17,20 @@ env = environ.Env(
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
-SECRET_KEY = env("SECRET_KEY", default="unsafe-development-secret-key")
 DEBUG = env("DEBUG")
 DJANGO_ENV = env("DJANGO_ENV", default="development")
+
+# The insecure fallback only applies when DEBUG=True (local dev without a
+# .env file) — a DEBUG=False deployment missing SECRET_KEY fails loudly at
+# boot (django-environ raises ImproperlyConfigured) instead of silently
+# running with a key that's sitting in source control. render.yaml already
+# sets SECRET_KEY via generateValue: true, so this never applies to the
+# real deployment.
+SECRET_KEY = (
+    env("SECRET_KEY", default="unsafe-development-secret-key")
+    if DEBUG
+    else env("SECRET_KEY")
+)
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
