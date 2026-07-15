@@ -243,6 +243,15 @@ class DriverSignupSerializer(serializers.Serializer):
         allow_blank=True,
     )
     license_number = serializers.CharField(max_length=80)
+    # Optional — driver_app's signup screen doesn't currently collect this,
+    # a vehicle is normally assigned later by an admin (see
+    # DriverProfileSerializer.validate_vehicle). Accepted here too since the
+    # backend signup API itself supports it.
+    vehicle_registration = serializers.CharField(
+        max_length=32,
+        required=False,
+        allow_blank=True,
+    )
     password = serializers.CharField(
         write_only=True,
         min_length=6,
@@ -264,6 +273,21 @@ class DriverSignupSerializer(serializers.Serializer):
             raise serializers.ValidationError("Driver license is already registered")
         return license_number
 
+    def validate_vehicle_registration(self, value):
+        if not value:
+            return value
+        registration = value.strip().upper()
+        from apps.operations.models import Vehicle
+
+        existing = Vehicle.objects.filter(
+            registration_number__iexact=registration
+        ).first()
+        if existing and DriverProfile.objects.filter(vehicle=existing).exists():
+            raise serializers.ValidationError(
+                "This vehicle is already assigned to another driver."
+            )
+        return registration
+
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError(
@@ -273,9 +297,14 @@ class DriverSignupSerializer(serializers.Serializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        from django.utils import timezone
+
+        from apps.operations.models import Vehicle
+
         validated_data.pop("confirm_password")
         password = validated_data.pop("password")
         license_number = validated_data.pop("license_number")
+        vehicle_registration = validated_data.pop("vehicle_registration", "")
 
         user = User.objects.create_user(
             password=password,
@@ -284,9 +313,27 @@ class DriverSignupSerializer(serializers.Serializer):
             **validated_data,
         )
         UserRole.objects.get_or_create(user=user, role=self._driver_role())
+
+        vehicle = None
+        if vehicle_registration:
+            # make/model/year are placeholders — admin staff fill in the
+            # real details later via admin_web's vehicle editor. Nothing
+            # dispatch-relevant depends on them (CRITICAL #5's document
+            # verification gate is what actually blocks a driver from
+            # being assigned trips).
+            vehicle, _ = Vehicle.objects.get_or_create(
+                registration_number=vehicle_registration,
+                defaults={
+                    "make": "Unknown",
+                    "model": "Unknown",
+                    "year": timezone.now().year,
+                },
+            )
+
         return DriverProfile.objects.create(
             user=user,
             license_number=license_number,
+            vehicle=vehicle,
         )
 
     def _driver_role(self):
