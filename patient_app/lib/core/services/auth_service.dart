@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:patient_app/core/services/http_timeout.dart';
 import 'package:patient_app/core/services/notifications_ws_service.dart';
 import 'package:patient_app/core/services/trip_api_service.dart';
 import 'package:patient_app/models/auth_session.dart';
@@ -56,6 +57,10 @@ class AuthService {
     return fallback;
   }
 
+  Future<http.Response> _withTimeout(Future<http.Response> future) {
+    return future.timeout(kApiTimeout, onTimeout: () => throw Exception(kApiColdStartMessage));
+  }
+
   String _label(String key) {
     const map = {
       'email': 'Email',
@@ -72,11 +77,11 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    final resp = await http.post(
+    final resp = await _withTimeout(http.post(
       Uri.parse('$_base/auth/login/'),
       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: jsonEncode({'email': email.trim().toLowerCase(), 'password': password}),
-    );
+    ));
 
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {
@@ -96,11 +101,11 @@ class AuthService {
   /// for a Tiba Safari session — signs in if the email already has an
   /// account, otherwise silently registers a new patient.
   Future<AuthSession> loginWithGoogle({required String idToken}) async {
-    final resp = await http.post(
+    final resp = await _withTimeout(http.post(
       Uri.parse('$_base/patients/auth/google/'),
       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: jsonEncode({'id_token': idToken}),
-    );
+    ));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {
       throw Exception(_extractError(body, 'Google sign-in failed'));
@@ -116,14 +121,14 @@ class AuthService {
     required String idToken,
     String? fullName,
   }) async {
-    final resp = await http.post(
+    final resp = await _withTimeout(http.post(
       Uri.parse('$_base/patients/auth/apple/'),
       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: jsonEncode({
         'id_token': idToken,
         if (fullName != null && fullName.isNotEmpty) 'full_name': fullName,
       }),
-    );
+    ));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {
       throw Exception(_extractError(body, 'Apple sign-in failed'));
@@ -189,7 +194,7 @@ class AuthService {
     bool medicalEscortRequired = false,
     bool ivDripRequired = false,
   }) async {
-    final resp = await http.post(
+    final resp = await _withTimeout(http.post(
       Uri.parse('$_base/patients/signup/'),
       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: jsonEncode({
@@ -205,7 +210,7 @@ class AuthService {
         'medical_escort_required': medicalEscortRequired,
         'iv_drip_required': ivDripRequired,
       }),
-    );
+    ));
 
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 201) {
@@ -214,11 +219,11 @@ class AuthService {
   }
 
   Future<void> verifyEmail({required String email, required String code}) async {
-    final resp = await http.post(
+    final resp = await _withTimeout(http.post(
       Uri.parse('$_base/auth/verify-email/'),
       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: jsonEncode({'email': email.trim().toLowerCase(), 'code': code.trim()}),
-    );
+    ));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {
       throw Exception(_extractError(body, 'Verification failed'));
@@ -226,11 +231,11 @@ class AuthService {
   }
 
   Future<void> resendVerification({required String email}) async {
-    final resp = await http.post(
+    final resp = await _withTimeout(http.post(
       Uri.parse('$_base/auth/resend-verification/'),
       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: jsonEncode({'email': email.trim().toLowerCase()}),
-    );
+    ));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {
       throw Exception(_extractError(body, 'Could not resend code'));
@@ -238,11 +243,11 @@ class AuthService {
   }
 
   Future<void> requestPasswordReset({required String email}) async {
-    final resp = await http.post(
+    final resp = await _withTimeout(http.post(
       Uri.parse('$_base/auth/password-reset/'),
       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: jsonEncode({'email': email.trim().toLowerCase()}),
-    );
+    ));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {
       throw Exception(_extractError(body, 'Could not request password reset'));
@@ -254,7 +259,7 @@ class AuthService {
     required String code,
     required String newPassword,
   }) async {
-    final resp = await http.post(
+    final resp = await _withTimeout(http.post(
       Uri.parse('$_base/auth/password-reset/confirm/'),
       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: jsonEncode({
@@ -262,7 +267,7 @@ class AuthService {
         'code': code.trim(),
         'new_password': newPassword,
       }),
-    );
+    ));
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {
       throw Exception(_extractError(body, 'Password reset failed'));

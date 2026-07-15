@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:patient_app/core/models/trip_message.dart';
+import 'package:patient_app/core/services/http_timeout.dart';
 
 const _storage = FlutterSecureStorage();
 const String _kToken = 'patient_access_token';
@@ -53,7 +54,7 @@ class TripApiService {
           'Accept': 'application/json',
         },
         body: jsonEncode({'refresh': refresh}),
-      );
+      ).timeout(kApiTimeout);
       if (resp.statusCode != 200) {
         await clearToken();
         return false;
@@ -477,15 +478,22 @@ class TripApiService {
   Future<http.Response> sendWithAuth(
     Future<http.Response> Function(String? token) attempt,
   ) async {
-    var resp = await attempt(await getToken());
+    var resp = await _withTimeout(attempt(await getToken()));
     if (resp.statusCode == 401) {
       if (await _refreshAccessToken()) {
-        resp = await attempt(await getToken());
+        resp = await _withTimeout(attempt(await getToken()));
       } else {
         throw Exception('Your session has expired. Please sign in again.');
       }
     }
     return resp;
+  }
+
+  /// Applies the shared cold-start-aware timeout (see http_timeout.dart) to
+  /// any raw http.* call — used here and by every caller of [sendWithAuth]
+  /// (facility/fare services), so this one wrapper covers all of them.
+  Future<http.Response> _withTimeout(Future<http.Response> future) {
+    return future.timeout(kApiTimeout, onTimeout: () => throw Exception(kApiColdStartMessage));
   }
 
   Map<String, dynamic> _parse(http.Response resp) {

@@ -99,6 +99,16 @@ class ApiDriverDataSource implements DriverDataSource {
     defaultValue: apiBaseUrl,
   );
 
+  // Render's free tier spins the backend down after inactivity, and a cold
+  // start can take up to ~50s — long enough that no request should be left
+  // to hang on the platform's own (much longer, silent) default socket
+  // timeout. 60s comfortably covers a cold start while still surfacing a
+  // clear, actionable error if the backend is genuinely unreachable.
+  static const _timeout = Duration(seconds: 60);
+  static const _coldStartMessage =
+      'The server is waking up (this can take up to a minute on Render\'s '
+      'free tier after a period of inactivity). Please wait and try again.';
+
   static String? _accessToken;
 
   @override
@@ -290,7 +300,10 @@ class ApiDriverDataSource implements DriverDataSource {
       request.files.add(await http.MultipartFile.fromPath('proof_photo', proofPhoto.path));
     }
 
-    final streamed = await request.send();
+    final streamed = await request.send().timeout(
+          const Duration(seconds: 90),
+          onTimeout: () => throw Exception(_coldStartMessage),
+        );
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(_errorMessage(response));
@@ -345,7 +358,10 @@ class ApiDriverDataSource implements DriverDataSource {
     if (expiryDate != null) request.fields['expiry_date'] = expiryDate;
     request.files.add(await http.MultipartFile.fromPath('file', file.path));
 
-    final streamed = await request.send();
+    final streamed = await request.send().timeout(
+          const Duration(seconds: 90),
+          onTimeout: () => throw Exception(_coldStartMessage),
+        );
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(_errorMessage(response));
@@ -552,12 +568,16 @@ class ApiDriverDataSource implements DriverDataSource {
         'Content-Type': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
       };
-      return switch (method) {
+      final future = switch (method) {
         'GET' => http.get(uri, headers: headers),
         'PATCH' => http.patch(uri, headers: headers, body: encodedBody),
         'POST' => http.post(uri, headers: headers, body: encodedBody),
         _ => throw UnsupportedError('Unsupported method: $method'),
       };
+      return future.timeout(
+        _timeout,
+        onTimeout: () => throw Exception(_coldStartMessage),
+      );
     }
 
     var response =
@@ -597,7 +617,7 @@ class ApiDriverDataSource implements DriverDataSource {
           'Accept': 'application/json',
         },
         body: jsonEncode({'refresh': refresh}),
-      );
+      ).timeout(_timeout);
       if (resp.statusCode != 200) {
         await AuthStorage.instance.clear();
         _accessToken = null;

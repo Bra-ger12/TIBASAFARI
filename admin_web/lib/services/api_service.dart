@@ -33,6 +33,16 @@ class ApiService {
     defaultValue: 'https://tibasafari-backend.onrender.com/api/v1',
   );
 
+  // Render's free tier spins the backend down after inactivity, and a cold
+  // start can take up to ~50s — long enough that no request should ever be
+  // left to hang on the platform's own (much longer, and silent) default
+  // socket timeout. 60s comfortably covers a cold start while still
+  // surfacing a clear, actionable error if the backend is genuinely down.
+  static const _timeout = Duration(seconds: 60);
+  static const _coldStartMessage =
+      'The server is waking up (this can take up to a minute on Render\'s '
+      'free tier after a period of inactivity). Please wait and try again.';
+
   static Map<String, String> get _headers {
     final token = AuthStorage.accessToken;
     return {
@@ -77,7 +87,7 @@ class ApiService {
     final res = await http.get(
       Uri.parse('$_base$path'),
       headers: _headers,
-    );
+    ).timeout(_timeout, onTimeout: () => throw ApiException(_coldStartMessage, 0));
     final body = _handle(res);
     final unwrapped = _unwrap(body);
     if (unwrapped is Map<String, dynamic>) return unwrapped;
@@ -91,7 +101,7 @@ class ApiService {
     final res = await http.get(
       Uri.parse('$_base$path'),
       headers: _headers,
-    );
+    ).timeout(_timeout, onTimeout: () => throw ApiException(_coldStartMessage, 0));
     return _extractList(_handle(res));
   }
 
@@ -104,7 +114,7 @@ class ApiService {
       Uri.parse('$_base$path'),
       headers: _headers,
       body: body != null ? jsonEncode(body) : null,
-    );
+    ).timeout(_timeout, onTimeout: () => throw ApiException(_coldStartMessage, 0));
     final parsed = _handle(res);
     final unwrapped = _unwrap(parsed);
     if (unwrapped is Map<String, dynamic>) return unwrapped;
@@ -121,7 +131,7 @@ class ApiService {
       Uri.parse('$_base$path'),
       headers: _headers,
       body: body != null ? jsonEncode(body) : null,
-    );
+    ).timeout(_timeout, onTimeout: () => throw ApiException(_coldStartMessage, 0));
     final parsed = _handle(res);
     final unwrapped = _unwrap(parsed);
     if (unwrapped is Map<String, dynamic>) return unwrapped;
@@ -134,7 +144,7 @@ class ApiService {
     final res = await http.delete(
       Uri.parse('$_base$path'),
       headers: _headers,
-    );
+    ).timeout(_timeout, onTimeout: () => throw ApiException(_coldStartMessage, 0));
     final parsed = _handle(res);
     if (parsed is Map<String, dynamic>) return parsed;
     return {};
