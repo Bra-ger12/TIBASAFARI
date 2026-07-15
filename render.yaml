@@ -108,8 +108,18 @@ services:
     name: tibasafari-admin
     runtime: static
     rootDir: admin_web
+    # A cached flutter/ checkout that's missing its .git dir, on the wrong
+    # remote, or otherwise corrupted (e.g. a previous build killed mid-clone)
+    # used to fail every deploy forever, since `cd flutter && git pull`
+    # failing aborted the whole buildCommand with no path to recovery short
+    # of manually clearing Render's build cache. Wipe and re-clone instead
+    # of giving up whenever the cached checkout isn't in the expected state.
     buildCommand: >-
-      if cd flutter; then git pull && cd ..; else git clone https://github.com/flutter/flutter.git -b stable; fi &&
+      if [ -d flutter/.git ] && (cd flutter && git fetch origin stable && git reset --hard origin/stable); then
+      echo "Reusing cached Flutter SDK checkout";
+      else
+      rm -rf flutter && git clone https://github.com/flutter/flutter.git -b stable;
+      fi &&
       flutter/bin/flutter config --enable-web &&
       flutter/bin/flutter pub get &&
       flutter/bin/flutter build web --release --dart-define=API_BASE=https://tibasafari-backend.onrender.com/api/v1
