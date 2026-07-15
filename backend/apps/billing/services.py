@@ -236,18 +236,55 @@ class InvoiceService:
     def create_for_trip(
         self,
         trip: Trip,
-        distance_km: float = 0.0,
-        duration_minutes: int = 0,
+        distance_km: float = None,
+        duration_minutes: int = None,
         discount: Decimal = Decimal("0.00"),
         tax_rate: Decimal = Decimal("0.00"),
     ) -> Invoice:
         if hasattr(trip, "invoice"):
             return trip.invoice
 
+        # Automatic path (TripService.complete_trip calls this with no
+        # overrides): the trip already has an authoritative final_fare from
+        # FareEstimator (set at completion) — use it directly rather than
+        # recomputing with the simpler base+distance+time formula below,
+        # so the invoice total always matches the "final fare" shown
+        # everywhere else in the apps.
+        no_overrides = (
+            distance_km is None
+            and duration_minutes is None
+            and discount == Decimal("0.00")
+            and tax_rate == Decimal("0.00")
+        )
+        if trip.final_fare is not None and no_overrides:
+            breakdown = trip.final_fare_breakdown or {}
+            invoice = Invoice.objects.create(
+                trip=trip,
+                patient=trip.patient,
+                status=Invoice.Status.ISSUED,
+                issued_at=timezone.now(),
+                base_fare=_d(breakdown.get("base_fare", 0)),
+                distance_km=_d(breakdown.get("distance_km") or trip.distance_km or 0),
+                distance_charge=_d(breakdown.get("distance_charge", 0)),
+                duration_minutes=trip.duration_minutes or 0,
+                time_charge=_d(breakdown.get("waiting_charge", 0)),
+                wheelchair_surcharge=Decimal("0.00"),
+                discount=Decimal("0.00"),
+                subtotal=_d(breakdown.get("subtotal_after_multiplier", trip.final_fare)),
+                tax_rate=Decimal("0.00"),
+                tax_amount=Decimal("0.00"),
+                total_amount=_d(trip.final_fare),
+                amount_due=_d(trip.final_fare),
+            )
+            return invoice
+
+        # Manual/edge-case path (staff explicitly provided distance/duration/
+        # discount/tax via the admin "Generate Invoice" action, or the trip
+        # has no final_fare yet — e.g. missing coordinates at completion).
         wheelchair = "wheelchair" in (trip.special_requirements or "").lower()
         fare = self.calculator.calculate(
-            distance_km,
-            duration_minutes,
+            distance_km or 0.0,
+            duration_minutes or 0,
             wheelchair=wheelchair,
             discount=discount,
             tax_rate=tax_rate,

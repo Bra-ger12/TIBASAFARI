@@ -292,6 +292,17 @@ class TripService:
 
         trip.save(update_fields=update_fields)
         _push_trip_status(trip)
+
+        # Auto-generate the invoice the moment a trip completes — without
+        # this, a patient has no invoice to ever pay against (billing_screen
+        # in patient_app only lists invoices that already exist).
+        from apps.billing.services import InvoiceService
+
+        try:
+            InvoiceService().create_for_trip(trip)
+        except Exception:
+            pass  # billing hiccup shouldn't block the trip-completion response
+
         _notify(
             trip.patient,
             "Trip Completed",
