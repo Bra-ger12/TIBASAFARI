@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
@@ -1298,8 +1299,15 @@ class _ErrorCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   OutlinedButton.icon(
-                    onPressed: () {
-                      // TODO: hook up clipboard — Clipboard.setData(ClipboardData(text: message));
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: message));
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Error copied to clipboard'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.copy_rounded, size: 14),
                     label: const Text('Copy Error'),
