@@ -119,6 +119,18 @@ class DriverProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Driver profile already exists")
         return value
 
+    def validate_vehicle(self, value):
+        if value is None:
+            return value
+        queryset = DriverProfile.objects.filter(vehicle=value)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError(
+                "This vehicle is already assigned to another driver."
+            )
+        return value
+
 
 class DriverDocumentSerializer(serializers.ModelSerializer):
     doc_type_display = serializers.CharField(
