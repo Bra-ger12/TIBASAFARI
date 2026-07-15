@@ -20,6 +20,8 @@ class TripRoomWsService {
 
   WebSocketChannel? _channel;
   String? _activeTripId;
+  Timer? _reconnectTimer;
+  int _reconnectAttempts = 0;
 
   final _locationController = StreamController<Map<String, double>>.broadcast();
   final _statusController = StreamController<String>.broadcast();
@@ -28,11 +30,20 @@ class TripRoomWsService {
   Stream<String> get statusStream => _statusController.stream;
 
   void connect(String tripId) {
-    if (_activeTripId == tripId) return;
-    disconnect();
+    if (_activeTripId == tripId && _channel != null) return;
+    if (_activeTripId != tripId) disconnect();
     final token = AuthStorage.accessToken;
     if (token == null) return;
     _activeTripId = tripId;
+    _reconnectAttempts = 0;
+    _reconnectTimer?.cancel();
+    _openChannel();
+  }
+
+  void _openChannel() {
+    final tripId = _activeTripId;
+    final token = AuthStorage.accessToken;
+    if (tripId == null || token == null) return;
     final uri = Uri.parse('$_wsBase/ws/trips/$tripId/?token=$token');
     _channel = WebSocketChannel.connect(uri);
     _channel!.stream.listen(
@@ -50,14 +61,30 @@ class TripRoomWsService {
           }
         } catch (_) {}
       },
-      onDone: () => _activeTripId = null,
-      onError: (_) => _activeTripId = null,
+      onDone: _scheduleReconnect,
+      onError: (_) => _scheduleReconnect(),
     );
   }
 
+  /// Reconnects with a capped linear backoff (2s, 4s, ... up to 10s) rather
+  /// than giving up — a dropped connection previously meant the dispatcher's
+  /// live map/status view silently froze until the page was reopened.
+  void _scheduleReconnect() {
+    _channel = null;
+    if (_activeTripId == null) return;
+    _reconnectAttempts++;
+    final delay = Duration(seconds: (_reconnectAttempts * 2).clamp(2, 10));
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, () {
+      if (_activeTripId != null) _openChannel();
+    });
+  }
+
   void disconnect() {
+    _reconnectTimer?.cancel();
     _channel?.sink.close();
     _channel = null;
     _activeTripId = null;
+    _reconnectAttempts = 0;
   }
 }

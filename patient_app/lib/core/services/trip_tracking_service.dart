@@ -14,6 +14,9 @@ class TripTrackingService {
 
   WebSocketChannel? _channel;
   String? _activeTripId;
+  String? _token;
+  Timer? _reconnectTimer;
+  int _reconnectAttempts = 0;
 
   final _locationController =
       StreamController<Map<String, double>>.broadcast();
@@ -30,22 +33,50 @@ class TripTrackingService {
   );
 
   void connect({required String tripId, required String token}) {
-    if (_activeTripId == tripId) return;
-    disconnect();
+    if (_activeTripId == tripId && _channel != null) return;
+    if (_activeTripId != tripId) disconnect();
     _activeTripId = tripId;
+    _token = token;
+    _reconnectAttempts = 0;
+    _reconnectTimer?.cancel();
+    _openChannel();
+  }
+
+  void _openChannel() {
+    final tripId = _activeTripId;
+    final token = _token;
+    if (tripId == null || token == null) return;
     final uri = Uri.parse('$_wsBase/ws/trips/$tripId/?token=$token');
     _channel = WebSocketChannel.connect(uri);
     _channel!.stream.listen(
       _onMessage,
-      onDone: () => _activeTripId = null,
-      onError: (_) => _activeTripId = null,
+      onDone: _scheduleReconnect,
+      onError: (_) => _scheduleReconnect(),
     );
   }
 
+  /// Reconnects with a capped linear backoff (2s, 4s, ... up to 10s) rather
+  /// than giving up — a dropped connection previously meant the live map
+  /// and status badge silently froze for the rest of the trip with no
+  /// recovery until the patient manually left and reopened the screen.
+  void _scheduleReconnect() {
+    _channel = null;
+    if (_activeTripId == null) return;
+    _reconnectAttempts++;
+    final delay = Duration(seconds: (_reconnectAttempts * 2).clamp(2, 10));
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, () {
+      if (_activeTripId != null) _openChannel();
+    });
+  }
+
   void disconnect() {
+    _reconnectTimer?.cancel();
     _channel?.sink.close();
     _channel = null;
     _activeTripId = null;
+    _token = null;
+    _reconnectAttempts = 0;
   }
 
   void _onMessage(dynamic raw) {
