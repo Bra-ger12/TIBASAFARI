@@ -1,15 +1,20 @@
-"""JWT authentication middleware for Django Channels WebSockets."""
-from urllib.parse import parse_qs
+"""JWT authentication helper for Django Channels WebSocket consumers.
 
+Clients authenticate by sending {"type": "auth", "token": "<jwt>"} as their
+first WS message after the connection is accepted, rather than passing the
+token in the connection URL's ?token= query param. A URL (including its
+query string) is commonly captured in server/proxy access logs, which
+would otherwise leak live access tokens into log storage.
+"""
 from channels.db import database_sync_to_async
-from channels.middleware import BaseMiddleware
-from django.contrib.auth.models import AnonymousUser
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import AccessToken
 
 
 @database_sync_to_async
-def get_user_from_token(token_str):
+def authenticate_ws_token(token_str):
+    if not token_str:
+        return None
     from django.contrib.auth import get_user_model
 
     User = get_user_model()
@@ -17,18 +22,4 @@ def get_user_from_token(token_str):
         token = AccessToken(token_str)
         return User.objects.get(id=token["user_id"])
     except (InvalidToken, TokenError, User.DoesNotExist, KeyError):
-        return AnonymousUser()
-
-
-class JWTAuthMiddleware(BaseMiddleware):
-    """Extract JWT from ?token= query param and authenticate the WS connection."""
-
-    async def __call__(self, scope, receive, send):
-        query_string = scope.get("query_string", b"").decode()
-        params = parse_qs(query_string)
-        token_list = params.get("token", [])
-        if token_list:
-            scope["user"] = await get_user_from_token(token_list[0])
-        else:
-            scope["user"] = AnonymousUser()
-        return await super().__call__(scope, receive, send)
+        return None

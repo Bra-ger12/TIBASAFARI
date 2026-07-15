@@ -35,6 +35,8 @@ class NotificationsWsService {
 
   WebSocketChannel? _channel;
   String? _connectedToken;
+  Timer? _reconnectTimer;
+  int _reconnectAttempts = 0;
   final _notificationController =
       StreamController<PatientNotification>.broadcast();
 
@@ -47,12 +49,23 @@ class NotificationsWsService {
   );
 
   void connect({required String token}) {
-    if (_connectedToken == token) return;
-    disconnect();
+    if (_connectedToken == token && _channel != null) return;
+    if (_connectedToken != token) disconnect();
     _connectedToken = token;
-    final uri = Uri.parse('$_wsBase/ws/notifications/?token=$token');
-    _channel = WebSocketChannel.connect(uri);
-    _channel!.stream.listen(
+    _reconnectAttempts = 0;
+    _reconnectTimer?.cancel();
+    _openChannel();
+  }
+
+  void _openChannel() {
+    final token = _connectedToken;
+    if (token == null) return;
+    // No ?token= here — the JWT is sent as the first WS message instead
+    // (see below), so it never ends up in a proxy/server access log.
+    final uri = Uri.parse('$_wsBase/ws/notifications/');
+    final channel = WebSocketChannel.connect(uri);
+    _channel = channel;
+    channel.stream.listen(
       (raw) {
         try {
           final data = json.decode(raw as String) as Map<String, dynamic>;
@@ -61,15 +74,33 @@ class NotificationsWsService {
           }
         } catch (_) {}
       },
-      onDone: () => _connectedToken = null,
-      onError: (_) => _connectedToken = null,
+      onDone: _scheduleReconnect,
+      onError: (_) => _scheduleReconnect(),
     );
+    channel.ready.then((_) {
+      if (_channel == channel) {
+        channel.sink.add(json.encode({'type': 'auth', 'token': token}));
+      }
+    }).catchError((_) {});
+  }
+
+  void _scheduleReconnect() {
+    _channel = null;
+    if (_connectedToken == null) return;
+    _reconnectAttempts++;
+    final delay = Duration(seconds: (_reconnectAttempts * 2).clamp(2, 10));
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, () {
+      if (_connectedToken != null) _openChannel();
+    });
   }
 
   void disconnect() {
+    _reconnectTimer?.cancel();
     _channel?.sink.close();
     _channel = null;
     _connectedToken = null;
+    _reconnectAttempts = 0;
   }
 
   void dispose() {

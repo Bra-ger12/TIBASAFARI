@@ -67,7 +67,9 @@ class DispatchWsService {
   );
 
   WebSocketChannel? _channel;
-  bool _connected = false;
+  bool _wanted = false;
+  Timer? _reconnectTimer;
+  int _reconnectAttempts = 0;
 
   final _tripUpdateController = StreamController<TripUpdateEvent>.broadcast();
   final _driverLocationController = StreamController<DriverLocationEvent>.broadcast();
@@ -76,13 +78,22 @@ class DispatchWsService {
   Stream<DriverLocationEvent> get driverLocations => _driverLocationController.stream;
 
   void connect() {
-    if (_connected) return;
+    if (_wanted && _channel != null) return;
+    _wanted = true;
+    _reconnectAttempts = 0;
+    _reconnectTimer?.cancel();
+    _openChannel();
+  }
+
+  void _openChannel() {
     final token = AuthStorage.accessToken;
     if (token == null) return;
-    final uri = Uri.parse('$_wsBase/ws/dispatch/?token=$token');
-    _channel = WebSocketChannel.connect(uri);
-    _connected = true;
-    _channel!.stream.listen(
+    // No ?token= here — the JWT is sent as the first WS message instead
+    // (see below), so it never ends up in a proxy/server access log.
+    final uri = Uri.parse('$_wsBase/ws/dispatch/');
+    final channel = WebSocketChannel.connect(uri);
+    _channel = channel;
+    channel.stream.listen(
       (raw) {
         try {
           final data = json.decode(raw as String) as Map<String, dynamic>;
@@ -94,14 +105,32 @@ class DispatchWsService {
           }
         } catch (_) {}
       },
-      onDone: () => _connected = false,
-      onError: (_) => _connected = false,
+      onDone: _scheduleReconnect,
+      onError: (_) => _scheduleReconnect(),
     );
+    channel.ready.then((_) {
+      if (_channel == channel) {
+        channel.sink.add(json.encode({'type': 'auth', 'token': token}));
+      }
+    }).catchError((_) {});
+  }
+
+  void _scheduleReconnect() {
+    _channel = null;
+    if (!_wanted) return;
+    _reconnectAttempts++;
+    final delay = Duration(seconds: (_reconnectAttempts * 2).clamp(2, 10));
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, () {
+      if (_wanted) _openChannel();
+    });
   }
 
   void disconnect() {
+    _wanted = false;
+    _reconnectTimer?.cancel();
     _channel?.sink.close();
     _channel = null;
-    _connected = false;
+    _reconnectAttempts = 0;
   }
 }

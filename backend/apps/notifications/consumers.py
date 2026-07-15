@@ -1,31 +1,34 @@
 """
 WebSocket consumer for real-time push notifications.
 
-Each authenticated user connects to ws/notifications/ and joins their own
-personal group. The backend sends to that group whenever a notification is saved.
+Each user connects to ws/notifications/ and authenticates by sending
+{"type": "auth", "token": "<jwt>"} as their first message (rather than a
+?token= query param, which would otherwise end up in proxy/server access
+logs), then joins their own personal group. The backend sends to that
+group whenever a notification is saved.
 """
 import json
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 
+from apps.core.ws_auth import authenticate_ws_token
+
 
 class NotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        user = self.scope.get("user")
-        if not user or isinstance(user, AnonymousUser):
-            await self.close(code=4001)
-            return
-
-        self.group_name = f"notifications_{user.id}"
-        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        self.authenticated = False
         await self.accept()
 
     async def disconnect(self, close_code):
-        if hasattr(self, "group_name"):
+        if getattr(self, "authenticated", False) and hasattr(self, "group_name"):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def receive(self, text_data):
+        if not self.authenticated:
+            await self._authenticate(text_data)
+            return
+
         # Clients can send {"action": "mark_read", "notification_id": "..."}
         try:
             data = json.loads(text_data)
@@ -33,6 +36,26 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             return
         if data.get("action") == "mark_read":
             await self._mark_read(data.get("notification_id"))
+
+    async def _authenticate(self, text_data):
+        try:
+            data = json.loads(text_data)
+        except json.JSONDecodeError:
+            data = {}
+        if data.get("type") != "auth":
+            await self.close(code=4001)
+            return
+
+        user = await authenticate_ws_token(data.get("token"))
+        if not user or isinstance(user, AnonymousUser):
+            await self.close(code=4001)
+            return
+
+        self.scope["user"] = user
+        self.group_name = f"notifications_{user.id}"
+        self.authenticated = True
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.send(text_data=json.dumps({"type": "auth_ok"}))
 
     async def notification_push(self, event):
         """Receives a group message and forwards it to the WS client."""

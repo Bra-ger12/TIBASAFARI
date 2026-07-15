@@ -1,8 +1,11 @@
 """
 WebSocket consumer for real-time trip tracking.
 
-Clients connect to ws/trips/<trip_id>/?token=<jwt>
-The driver posts location updates; all room members receive them.
+Clients connect to ws/trips/<trip_id>/ and authenticate by sending
+{"type": "auth", "token": "<jwt>"} as their first message — the JWT is
+never part of the connection URL, so it never ends up in proxy/server
+access logs. The driver posts location updates; all room members receive
+them.
 """
 import json
 
@@ -10,31 +13,26 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 
+from apps.core.ws_auth import authenticate_ws_token
+
 
 class TripConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.trip_id = self.scope["url_route"]["kwargs"]["trip_id"]
         self.room_group = f"trip_{self.trip_id}"
-        user = self.scope.get("user")
-
-        if not user or isinstance(user, AnonymousUser):
-            await self.close(code=4001)
-            return
-
-        allowed = await self._can_access_trip(user, self.trip_id)
-        if not allowed:
-            await self.close(code=4003)
-            return
-
-        await self.channel_layer.group_add(self.room_group, self.channel_name)
+        self.authenticated = False
         await self.accept()
 
     async def disconnect(self, close_code):
-        if hasattr(self, "room_group"):
+        if getattr(self, "authenticated", False) and hasattr(self, "room_group"):
             await self.channel_layer.group_discard(self.room_group, self.channel_name)
 
     async def receive(self, text_data):
-        """Driver sends: {"type": "location", "lat": 0.0, "lng": 0.0}"""
+        """After auth, driver sends: {"type": "location", "lat": 0.0, "lng": 0.0}"""
+        if not self.authenticated:
+            await self._authenticate(text_data)
+            return
+
         user = self.scope.get("user")
         if not user or isinstance(user, AnonymousUser):
             return
@@ -151,6 +149,30 @@ class TripConsumer(AsyncWebsocketConsumer):
         trip = Trip.objects.get(id=self.trip_id)
         TripService().send_trip_message(trip, sender=user, body=body)
 
+    async def _authenticate(self, text_data):
+        try:
+            data = json.loads(text_data)
+        except json.JSONDecodeError:
+            data = {}
+        if data.get("type") != "auth":
+            await self.close(code=4001)
+            return
+
+        user = await authenticate_ws_token(data.get("token"))
+        if user is None:
+            await self.close(code=4001)
+            return
+
+        allowed = await self._can_access_trip(user, self.trip_id)
+        if not allowed:
+            await self.close(code=4003)
+            return
+
+        self.scope["user"] = user
+        self.authenticated = True
+        await self.channel_layer.group_add(self.room_group, self.channel_name)
+        await self.send(text_data=json.dumps({"type": "auth_ok"}))
+
 
 class DispatchConsumer(AsyncWebsocketConsumer):
     """Dispatch-wide channel for the admin dashboard's live map — broadcasts
@@ -159,8 +181,26 @@ class DispatchConsumer(AsyncWebsocketConsumer):
     client's side; staff never send anything over this connection."""
 
     async def connect(self):
-        user = self.scope.get("user")
-        if not user or isinstance(user, AnonymousUser):
+        self.authenticated = False
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        if getattr(self, "authenticated", False) and hasattr(self, "group_name"):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def receive(self, text_data):
+        if self.authenticated:
+            return  # read-only channel — clients never send anything else
+        try:
+            data = json.loads(text_data)
+        except json.JSONDecodeError:
+            data = {}
+        if data.get("type") != "auth":
+            await self.close(code=4001)
+            return
+
+        user = await authenticate_ws_token(data.get("token"))
+        if user is None:
             await self.close(code=4001)
             return
 
@@ -170,12 +210,9 @@ class DispatchConsumer(AsyncWebsocketConsumer):
             return
 
         self.group_name = "dispatch"
+        self.authenticated = True
         await self.channel_layer.group_add(self.group_name, self.channel_name)
-        await self.accept()
-
-    async def disconnect(self, close_code):
-        if hasattr(self, "group_name"):
-            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        await self.send(text_data=json.dumps({"type": "auth_ok"}))
 
     async def dispatch_trip_update(self, event):
         await self.send(

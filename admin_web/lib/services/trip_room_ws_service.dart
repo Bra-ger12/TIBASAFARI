@@ -44,9 +44,12 @@ class TripRoomWsService {
     final tripId = _activeTripId;
     final token = AuthStorage.accessToken;
     if (tripId == null || token == null) return;
-    final uri = Uri.parse('$_wsBase/ws/trips/$tripId/?token=$token');
-    _channel = WebSocketChannel.connect(uri);
-    _channel!.stream.listen(
+    // No ?token= here — the JWT is sent as the first WS message instead
+    // (see below), so it never ends up in a proxy/server access log.
+    final uri = Uri.parse('$_wsBase/ws/trips/$tripId/');
+    final channel = WebSocketChannel.connect(uri);
+    _channel = channel;
+    channel.stream.listen(
       (raw) {
         try {
           final data = json.decode(raw as String) as Map<String, dynamic>;
@@ -64,6 +67,11 @@ class TripRoomWsService {
       onDone: _scheduleReconnect,
       onError: (_) => _scheduleReconnect(),
     );
+    channel.ready.then((_) {
+      if (_channel == channel) {
+        channel.sink.add(json.encode({'type': 'auth', 'token': token}));
+      }
+    }).catchError((_) {});
   }
 
   /// Reconnects with a capped linear backoff (2s, 4s, ... up to 10s) rather

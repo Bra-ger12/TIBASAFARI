@@ -75,7 +75,9 @@ class NotificationsWsService {
     final wsBaseUrl = _wsBaseUrl;
     if (token == null || wsBaseUrl == null) return;
 
-    final uri = Uri.parse('$wsBaseUrl/ws/notifications/?token=$token');
+    // No ?token= here — the JWT is sent as the first WS message instead
+    // (see below), so it never ends up in a proxy/server access log.
+    final uri = Uri.parse('$wsBaseUrl/ws/notifications/');
     final channel = WebSocketChannel.connect(uri);
     _channel = channel;
     _channelSub = channel.stream.listen(
@@ -91,6 +93,11 @@ class NotificationsWsService {
       onDone: _handleDrop,
       onError: (_) => _handleDrop(),
     );
+    channel.ready.then((_) {
+      if (_channel == channel) {
+        channel.sink.add(json.encode({'type': 'auth', 'token': token}));
+      }
+    }).catchError((_) {});
   }
 
   void _handleDrop() {
