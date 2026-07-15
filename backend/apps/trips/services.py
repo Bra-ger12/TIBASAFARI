@@ -11,6 +11,7 @@ import threading
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.core.mail import send_mail
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import exceptions
 
@@ -129,7 +130,9 @@ class TripService:
         )
         return trip
 
+    @transaction.atomic
     def assign_driver(self, trip, *, driver):
+        trip = Trip.objects.select_for_update().get(pk=trip.pk)
         if trip.status not in {Trip.Status.REQUESTED, Trip.Status.CANCELLED}:
             raise exceptions.ValidationError("Only requested trips can be assigned")
         self._assert_driver_verified(driver)
@@ -171,7 +174,9 @@ class TripService:
         )
         return trip
 
+    @transaction.atomic
     def accept_trip(self, trip, *, driver):
+        trip = Trip.objects.select_for_update().get(pk=trip.pk)
         self._assert_driver(trip, driver)
         if trip.status != Trip.Status.ASSIGNED:
             raise exceptions.ValidationError("Only assigned trips can be accepted")
@@ -190,7 +195,9 @@ class TripService:
         )
         return trip
 
+    @transaction.atomic
     def reject_trip(self, trip, *, driver):
+        trip = Trip.objects.select_for_update().get(pk=trip.pk)
         self._assert_driver(trip, driver)
         if trip.status != Trip.Status.ASSIGNED:
             raise exceptions.ValidationError("Only assigned trips can be rejected")
@@ -209,7 +216,9 @@ class TripService:
         )
         return trip
 
+    @transaction.atomic
     def start_trip(self, trip, *, driver):
+        trip = Trip.objects.select_for_update().get(pk=trip.pk)
         self._assert_driver(trip, driver)
         if trip.status != Trip.Status.ACCEPTED:
             raise exceptions.ValidationError("Only accepted trips can be started")
@@ -225,7 +234,9 @@ class TripService:
         )
         return trip
 
+    @transaction.atomic
     def arrive_trip(self, trip, *, driver):
+        trip = Trip.objects.select_for_update().get(pk=trip.pk)
         self._assert_driver(trip, driver)
         if trip.status != Trip.Status.EN_ROUTE:
             raise exceptions.ValidationError("Only en-route trips can be marked arrived")
@@ -241,6 +252,7 @@ class TripService:
         )
         return trip
 
+    @transaction.atomic
     def complete_trip(
         self,
         trip,
@@ -251,6 +263,7 @@ class TripService:
         signature=None,
         proof_photo=None,
     ):
+        trip = Trip.objects.select_for_update().get(pk=trip.pk)
         self._assert_driver(trip, driver)
         if trip.status not in {Trip.Status.EN_ROUTE, Trip.Status.ARRIVED}:
             raise exceptions.ValidationError("Only active trips can be completed")
@@ -324,7 +337,9 @@ class TripService:
         )
         return trip
 
+    @transaction.atomic
     def cancel_trip(self, trip, *, user):
+        trip = Trip.objects.select_for_update().get(pk=trip.pk)
         if trip.status == Trip.Status.COMPLETED:
             raise exceptions.ValidationError("Completed trips cannot be cancelled")
         trip.status = Trip.Status.CANCELLED
