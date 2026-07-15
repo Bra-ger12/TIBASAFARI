@@ -597,31 +597,77 @@ class _TrackRideScreenState extends State<TrackRideScreen>
   }
 
   void _showCancelDialog() {
+    var isCancelling = false;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Cancel Ride?',
-            style: TextStyle(fontWeight: FontWeight.w800, color: cTealDeep)),
-        content: const Text(
-            'Are you sure you want to cancel this ride? A cancellation fee may apply.',
-            style: TextStyle(color: cMuted)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Keep Ride', style: TextStyle(color: cTeal, fontWeight: FontWeight.w600)),
-          ),
-          ElevatedButton(
-            onPressed: () { Navigator.pop(ctx); Navigator.pop(context); },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: cError, foregroundColor: Colors.white, elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text('Cancel Ride', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('Cancel Ride?',
+                style: TextStyle(fontWeight: FontWeight.w800, color: cTealDeep)),
+            content: const Text(
+                'Are you sure you want to cancel this ride? A cancellation fee may apply.',
+                style: TextStyle(color: cMuted)),
+            actions: [
+              TextButton(
+                onPressed: isCancelling ? null : () => Navigator.pop(ctx),
+                child: const Text('Keep Ride', style: TextStyle(color: cTeal, fontWeight: FontWeight.w600)),
+              ),
+              ElevatedButton(
+                onPressed: isCancelling
+                    ? null
+                    : () async {
+                        setDialogState(() => isCancelling = true);
+                        await _confirmCancel(ctx);
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cError, foregroundColor: Colors.white, elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: isCancelling
+                    ? const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                      )
+                    : const Text('Cancel Ride', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        },
       ),
     );
+  }
+
+  Future<void> _confirmCancel(BuildContext dialogContext) async {
+    final id = widget.rideId;
+    if (id == null) {
+      Navigator.pop(dialogContext);
+      return;
+    }
+    final navigator = Navigator.of(dialogContext);
+    try {
+      await TripApiService.instance.cancelTrip(id);
+      if (!mounted) return;
+      navigator.pop();
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Ride cancelled'),
+        backgroundColor: cTeal,
+        behavior: SnackBarBehavior.floating,
+      ));
+      await Future.delayed(const Duration(milliseconds: 700));
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      navigator.pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: cError,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
   }
 }
 

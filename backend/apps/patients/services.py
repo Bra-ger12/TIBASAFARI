@@ -2,25 +2,17 @@ from django.db import transaction
 
 from apps.accounts.models import User
 from apps.patients.models import PatientProfile
-from apps.rbac.models import Permission, Role, UserRole
-
-_PATIENT_PERMISSIONS = {
-    "create_trip": "Create trip",
-    "view_own_trips": "View own trips",
-    "view_own_profile": "View own profile",
-    "view_notifications": "View notifications",
-}
+from apps.rbac.catalog import sync_role
+from apps.rbac.models import Role, UserRole
 
 
 def get_or_create_patient_role() -> Role:
-    role, _ = Role.objects.get_or_create(
-        code="PATIENT",
-        defaults={"name": "Patient", "description": "Patient user"},
-    )
-    for code, name in _PATIENT_PERMISSIONS.items():
-        perm, _ = Permission.objects.get_or_create(code=code, defaults={"name": name})
-        role.permissions.add(perm)
-    return role
+    # Delegates to the canonical role/permission catalog (apps.rbac.catalog)
+    # so patient signup can never grant a different permission set than
+    # the seed_rbac management command — previously this function was
+    # missing cancel_trip/trip_messages, silently breaking "Cancel Ride"
+    # and in-app chat for every real patient account.
+    return sync_role("PATIENT")
 
 
 class PatientService:

@@ -5,7 +5,8 @@ from rest_framework import serializers
 from apps.accounts.models import User
 from apps.core.media import build_secure_media_url
 from apps.drivers.models import DriverDocument, DriverProfile
-from apps.rbac.models import Permission, Role, UserRole
+from apps.rbac.catalog import sync_role
+from apps.rbac.models import UserRole
 from apps.trips.models import Trip, TripAssignmentEvent, TripRating
 
 
@@ -277,21 +278,9 @@ class DriverSignupSerializer(serializers.Serializer):
         )
 
     def _driver_role(self):
-        role, _ = Role.objects.get_or_create(
-            code="DRIVER",
-            defaults={"name": "DRIVER", "description": "Driver user"},
-        )
-        permission_names = {
-            "view_assigned_trips": "View assigned trips",
-            "update_trip_status": "Update trip status",
-            "update_location": "Update driver location",
-        }
-        permissions = []
-        for code, name in permission_names.items():
-            permission, _ = Permission.objects.get_or_create(
-                code=code,
-                defaults={"name": name},
-            )
-            permissions.append(permission)
-        role.permissions.add(*permissions)
-        return role
+        # Delegates to the canonical role/permission catalog (apps.rbac.
+        # catalog) so driver signup can never grant a different permission
+        # set than the seed_rbac management command — previously this
+        # method was missing trip_messages, silently breaking in-app chat
+        # for every real driver account.
+        return sync_role("DRIVER")

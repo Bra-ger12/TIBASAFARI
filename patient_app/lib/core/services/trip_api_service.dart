@@ -227,7 +227,7 @@ class TripApiService {
   }
 
   Future<Map<String, dynamic>> cancelTrip(String tripId) =>
-      _post('/patients/trip-requests/$tripId/cancel/', {});
+      _post('/trips/$tripId/cancel/', {});
 
   Future<List<TripChatMessage>> fetchTripMessages(String tripId) async {
     final resp = await _get('/trips/$tripId/messages/');
