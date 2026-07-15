@@ -35,6 +35,7 @@ class _ActiveTripMapScreenState extends State<ActiveTripMapScreen> {
   final Completer<GoogleMapController> _mapController = Completer();
   StreamSubscription<Position>? _locationSub;
   StreamSubscription<String>? _wsSub;
+  StreamSubscription<LocationPermissionResult>? _locationErrorSub;
 
   LatLng? _driverLatLng;
   LatLng? _pickupLatLng;
@@ -89,6 +90,9 @@ class _ActiveTripMapScreenState extends State<ActiveTripMapScreen> {
   }
 
   void _startTracking() async {
+    _locationErrorSub = LocationService.instance.trackingErrorStream.listen((result) {
+      if (mounted) _showLocationPermissionDialog(result);
+    });
     LocationService.instance.startTracking();
     _locationSub = LocationService.instance.stream.listen((pos) {
       final ll = LatLng(pos.latitude, pos.longitude);
@@ -133,9 +137,56 @@ class _ActiveTripMapScreenState extends State<ActiveTripMapScreen> {
   void dispose() {
     _locationSub?.cancel();
     _wsSub?.cancel();
+    _locationErrorSub?.cancel();
     LocationService.instance.stopTracking();
     TripWsService.instance.disconnect();
     super.dispose();
+  }
+
+  void _showLocationPermissionDialog(LocationPermissionResult result) {
+    final canRetry = result == LocationPermissionResult.denied;
+    final message = switch (result) {
+      LocationPermissionResult.serviceDisabled =>
+        'Location services are turned off on this device. Turn on GPS to '
+            'share your live position with dispatch and the patient.',
+      LocationPermissionResult.deniedForever =>
+        'Location permission was permanently denied. Open Settings to '
+            'allow it for this app so your live position reaches dispatch '
+            'and the patient.',
+      _ =>
+        'Location permission is required to share your live position with '
+            'dispatch and the patient during this trip.',
+    };
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Location Needed',
+            style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text(message, style: const TextStyle(color: cMuted)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Dismiss'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              if (canRetry) {
+                _startTracking();
+              } else if (result == LocationPermissionResult.serviceDisabled) {
+                Geolocator.openLocationSettings();
+              } else {
+                Geolocator.openAppSettings();
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: cTeal),
+            child: Text(canRetry ? 'Try Again' : 'Open Settings',
+                style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _performAction(String action) async {
