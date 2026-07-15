@@ -25,14 +25,15 @@ services:
       # people control, not just ours.
       - key: CSRF_TRUSTED_ORIGINS
         value: ""
+      # admin_web is deployed as its own Render static site with a fixed
+      # origin (see the tibasafari-admin service below), so production can
+      # scope CORS to just that domain instead of allowing every origin.
+      # settings.py's CORS_ALLOW_ALL_ORIGINS defaults to True only when
+      # DEBUG=True and this list is empty — local dev (flutter run -d
+      # chrome, random port each run) keeps working without needing an
+      # explicit override here.
       - key: CORS_ALLOWED_ORIGINS
-        value: ""
-      # admin_web has no fixed origin yet (flutter run -d chrome picks a
-      # random port each run) — allow all origins for now. Every endpoint
-      # still requires a valid JWT bearer token, so this doesn't expose
-      # data. Tighten to CORS_ALLOWED_ORIGINS once admin_web has a fixed URL.
-      - key: CORS_ALLOW_ALL_ORIGINS
-        value: "True"
+        value: "https://tibasafari-admin.onrender.com"
       - key: DATABASE_URL
         fromDatabase:
           name: tibasafari-db
