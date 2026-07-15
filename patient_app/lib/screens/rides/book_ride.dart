@@ -178,6 +178,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
   }
 
   Future<void> _submit() async {
+    if (_isLoading) return;
     if (!_formKey.currentState!.validate()) return;
     if (_scheduledAt == null) {
       _snack('Please select a pickup date & time', isError: true);
