@@ -217,37 +217,37 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _sectionLabel('Mobility Assistance'),
-          RadioListTile<String>(
-            value: 'NONE',
+          RadioGroup<String>(
             groupValue: _mobilityNeeds,
             onChanged: (value) => setState(() => _mobilityNeeds = value!),
-            activeColor: AppColors.primary,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('None'),
-          ),
-          RadioListTile<String>(
-            value: 'WHEELCHAIR',
-            groupValue: _mobilityNeeds,
-            onChanged: (value) => setState(() => _mobilityNeeds = value!),
-            activeColor: AppColors.primary,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Wheelchair'),
-          ),
-          RadioListTile<String>(
-            value: 'STRETCHER',
-            groupValue: _mobilityNeeds,
-            onChanged: (value) => setState(() => _mobilityNeeds = value!),
-            activeColor: AppColors.primary,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Stretcher'),
-          ),
-          RadioListTile<String>(
-            value: 'WALKER_CRUTCHES',
-            groupValue: _mobilityNeeds,
-            onChanged: (value) => setState(() => _mobilityNeeds = value!),
-            activeColor: AppColors.primary,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Walker / Crutches'),
+            child: Column(
+              children: [
+                RadioListTile<String>(
+                  value: 'NONE',
+                  activeColor: AppColors.primary,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('None'),
+                ),
+                RadioListTile<String>(
+                  value: 'WHEELCHAIR',
+                  activeColor: AppColors.primary,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Wheelchair'),
+                ),
+                RadioListTile<String>(
+                  value: 'STRETCHER',
+                  activeColor: AppColors.primary,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Stretcher'),
+                ),
+                RadioListTile<String>(
+                  value: 'WALKER_CRUTCHES',
+                  activeColor: AppColors.primary,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Walker / Crutches'),
+                ),
+              ],
+            ),
           ),
 
           const SizedBox(height: 8),
