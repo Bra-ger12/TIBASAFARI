@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.accounts.models import User
+from apps.core.media import build_secure_media_url
 from apps.rbac.permissions import has_role
 from apps.trips.models import RecurringSchedule, Trip, TripMessage, TripRating
 
@@ -70,6 +71,8 @@ class TripSerializer(serializers.ModelSerializer):
             "distance_km",
             "duration_minutes",
             "estimated_fare",
+            "final_fare",
+            "final_fare_breakdown",
             "signature",
             "proof_photo",
             "accepted_at",
@@ -92,6 +95,8 @@ class TripSerializer(serializers.ModelSerializer):
             "driver_vehicle_make",
             "driver_vehicle_model",
             "driver_vehicle_registration",
+            "final_fare",
+            "final_fare_breakdown",
             "signature",
             "proof_photo",
             "accepted_at",
@@ -105,6 +110,12 @@ class TripSerializer(serializers.ModelSerializer):
             "rating_score",
             "destination_facility_name",
         )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["signature"] = build_secure_media_url(self.context.get("request"), instance.signature)
+        data["proof_photo"] = build_secure_media_url(self.context.get("request"), instance.proof_photo)
+        return data
 
 
 class TripCreateSerializer(serializers.ModelSerializer):

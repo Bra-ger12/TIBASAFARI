@@ -1,7 +1,5 @@
-from django.conf import settings
 from django.contrib import admin
-from django.urls import include, path, re_path
-from django.views.static import serve
+from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -15,7 +13,7 @@ from apps.accounts.views import (
     ResendVerificationView,
     VerifyEmailView,
 )
-from apps.core.views import HealthCheckView
+from apps.core.views import HealthCheckView, SecureMediaView
 
 api_patterns = [
     path("health/", HealthCheckView.as_view(), name="health"),
@@ -57,20 +55,10 @@ urlpatterns = [
         SpectacularSwaggerView.as_view(url_name="schema"),
         name="swagger-ui",
     ),
-]
-
-# Serving user uploads straight off Django even outside DEBUG is not ideal
-# at scale, but Render has no separate media host configured yet, so this
-# is what makes uploaded driver documents viewable at all in production.
-# django.conf.urls.static.static() silently no-ops unless DEBUG=True, so a
-# prior attempt at this (using that helper) never actually registered the
-# route in production — every /media/ URL 404'd. Wiring django.views.static
-# .serve directly here bypasses that DEBUG check.
-# Note: Render's disk is ephemeral — uploads still don't survive a redeploy.
-urlpatterns += [
-    re_path(
-        r"^%s(?P<path>.*)$" % settings.MEDIA_URL.lstrip("/"),
-        serve,
-        {"document_root": settings.MEDIA_ROOT},
-    ),
+    # Uploaded documents (patient medical records, driver licenses, trip
+    # signatures/photos) contain PII and are never served under the raw
+    # MEDIA_URL prefix — only via a short-lived signed token handed out by
+    # an already-authorized API response. See apps.core.media/views.
+    # Note: Render's disk is ephemeral — uploads still don't survive a redeploy.
+    path("secure-media/<str:token>/", SecureMediaView.as_view(), name="secure-media"),
 ]

@@ -3,6 +3,7 @@ from django.db.models import Avg, Count, Q, Sum
 from rest_framework import serializers
 
 from apps.accounts.models import User
+from apps.core.media import build_secure_media_url
 from apps.drivers.models import DriverDocument, DriverProfile
 from apps.rbac.models import Permission, Role, UserRole
 from apps.trips.models import Trip, TripAssignmentEvent, TripRating
@@ -144,6 +145,11 @@ class DriverDocumentSerializer(serializers.ModelSerializer):
             "uploaded_at",
             "reviewed_at",
         )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["file"] = build_secure_media_url(self.context.get("request"), instance.file)
+        return data
 
 
 class DriverDocumentReviewSerializer(serializers.Serializer):

@@ -2,6 +2,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from apps.accounts.models import User
+from apps.core.media import build_secure_media_url
 from apps.patients.models import PatientDocument, PatientProfile
 from apps.patients.services import get_or_create_patient_role
 from apps.rbac.models import UserRole
@@ -24,6 +25,11 @@ class PatientDocumentSerializer(serializers.ModelSerializer):
             "uploaded_at",
         )
         read_only_fields = ("id", "doc_type_display", "uploaded_at")
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["file"] = build_secure_media_url(self.context.get("request"), instance.file)
+        return data
 
 
 class PatientProfileSerializer(serializers.ModelSerializer):
