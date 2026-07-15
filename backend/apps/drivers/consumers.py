@@ -21,11 +21,19 @@ class DriverLocationConsumer(AsyncWebsocketConsumer):
             return
 
         self.is_driver = await self._check_driver(user)
-        await self.channel_layer.group_add(FLEET_GROUP, self.channel_name)
+        # Only dispatch/admin users receive the fleet-wide broadcast — any
+        # authenticated user (including patients) was previously added to
+        # FLEET_GROUP and could watch every driver's live GPS position.
+        # Drivers can still connect and POST their own location below even
+        # though they aren't added to the receive group.
+        self.can_watch_fleet = await self._check_can_watch_fleet(user)
+        if self.can_watch_fleet:
+            await self.channel_layer.group_add(FLEET_GROUP, self.channel_name)
         await self.accept()
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(FLEET_GROUP, self.channel_name)
+        if getattr(self, "can_watch_fleet", False):
+            await self.channel_layer.group_discard(FLEET_GROUP, self.channel_name)
 
     async def receive(self, text_data):
         """Drivers post: {"lat": 0.0, "lng": 0.0}"""
@@ -67,6 +75,12 @@ class DriverLocationConsumer(AsyncWebsocketConsumer):
         from apps.drivers.models import DriverProfile
 
         return DriverProfile.objects.filter(user=user).exists()
+
+    @database_sync_to_async
+    def _check_can_watch_fleet(self, user):
+        from apps.rbac.permissions import has_permission
+
+        return has_permission(user, "manage_trips")
 
     @database_sync_to_async
     def _update_location(self, user, lat, lng):
