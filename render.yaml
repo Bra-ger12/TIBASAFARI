@@ -78,6 +78,20 @@ services:
       # committed directly rather than left for the Render dashboard.
       - key: GOOGLE_OAUTH_CLIENT_IDS
         value: "1029093901039-bljbf5po2so301ctjvaj62p7knsbjfrn.apps.googleusercontent.com"
+      # Fare calculation inputs — settings.py already falls back to these
+      # exact values if unset, so omitting them never crashes the app. They
+      # are listed explicitly here so pricing can be tuned from the Render
+      # dashboard without a code change/redeploy.
+      - key: FARE_BASE_RATE
+        value: "2.50"
+      - key: FARE_PER_KM
+        value: "1.20"
+      - key: FARE_PER_MINUTE
+        value: "0.25"
+      - key: FARE_MINIMUM
+        value: "8.00"
+      - key: FARE_WHEELCHAIR_SURCHARGE
+        value: "5.00"
 
   - type: web
     name: tibasafari-admin
