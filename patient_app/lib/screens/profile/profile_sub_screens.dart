@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:patient_app/core/services/trip_api_service.dart';
 import 'package:patient_app/core/theme/app_theme.dart';
 import 'package:patient_app/models/auth_session.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const Color cTeal = AppColors.primary;
 const Color cTealDark = AppColors.primaryDark;
@@ -376,6 +377,25 @@ class _MedicalProfileScreenState extends State<MedicalProfileScreen> {
     }
   }
 
+  Future<void> _openDocument(String? url) async {
+    if (url == null || url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('This document is unavailable'),
+          backgroundColor: cError,
+          behavior: SnackBarBehavior.floating));
+      return;
+    }
+    final uri = Uri.tryParse(url);
+    final launched = uri != null &&
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not open this document'),
+          backgroundColor: cError,
+          behavior: SnackBarBehavior.floating));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = _profile;
@@ -459,7 +479,7 @@ class _MedicalProfileScreenState extends State<MedicalProfileScreen> {
                       subtitle: (doc['description'] as String?)?.isNotEmpty == true
                           ? doc['description'] as String
                           : null,
-                      onTap: () {},
+                      onTap: () => _openDocument(doc['file'] as String?),
                     ))
                 .toList(),
           ),
