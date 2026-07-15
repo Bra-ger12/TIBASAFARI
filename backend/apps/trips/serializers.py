@@ -119,6 +119,13 @@ class TripSerializer(serializers.ModelSerializer):
 
 
 class TripCreateSerializer(serializers.ModelSerializer):
+    def validate_destination_facility(self, value):
+        if value is not None and not value.is_active:
+            raise serializers.ValidationError(
+                "This facility is no longer accepting trips."
+            )
+        return value
+
     class Meta:
         model = Trip
         fields = (

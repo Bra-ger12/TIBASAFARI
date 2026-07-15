@@ -4,6 +4,7 @@ import pytest
 from django.utils import timezone
 
 from apps.accounts.models import User
+from apps.facilities.models import HealthFacility
 from apps.patients.serializers import PatientTripRequestSerializer
 from apps.trips.models import Trip, TripRating
 
@@ -72,3 +73,42 @@ def test_serializer_handles_unassigned_and_unrated_trip():
     assert data.get("driver_name") is None
     assert data["is_rated"] is False
     assert data["rating_score"] is None
+
+
+@pytest.mark.django_db
+def test_cannot_book_trip_to_inactive_facility():
+    facility = HealthFacility.objects.create(
+        name="Closed Clinic",
+        latitude=Decimal("-6.7924"),
+        longitude=Decimal("39.2083"),
+        is_active=False,
+    )
+    serializer = PatientTripRequestSerializer(
+        data={
+            "pickup_address": "123 Pickup St",
+            "destination_address": "456 Destination Ave",
+            "destination_facility": str(facility.id),
+            "scheduled_at": timezone.now().isoformat(),
+        }
+    )
+    assert not serializer.is_valid()
+    assert "destination_facility" in serializer.errors
+
+
+@pytest.mark.django_db
+def test_can_book_trip_to_active_facility():
+    facility = HealthFacility.objects.create(
+        name="Open Clinic",
+        latitude=Decimal("-6.7924"),
+        longitude=Decimal("39.2083"),
+        is_active=True,
+    )
+    serializer = PatientTripRequestSerializer(
+        data={
+            "pickup_address": "123 Pickup St",
+            "destination_address": "456 Destination Ave",
+            "destination_facility": str(facility.id),
+            "scheduled_at": timezone.now().isoformat(),
+        }
+    )
+    assert serializer.is_valid(), serializer.errors

@@ -105,6 +105,13 @@ class PatientTripRequestSerializer(serializers.ModelSerializer):
     def get_rating_score(self, obj):
         return obj.rating.score if hasattr(obj, "rating") else None
 
+    def validate_destination_facility(self, value):
+        if value is not None and not value.is_active:
+            raise serializers.ValidationError(
+                "This facility is no longer accepting trips."
+            )
+        return value
+
     class Meta:
         model = Trip
         fields = (
