@@ -248,7 +248,12 @@ class _BookRideScreenState extends State<BookRideScreen> {
         }
       }
     } catch (e) {
-      if (mounted) _snack('Booking failed: $e', isError: true);
+      if (mounted) {
+        _snack(
+          'Booking failed: ${e.toString().replaceFirst('Exception: ', '')}',
+          isError: true,
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
