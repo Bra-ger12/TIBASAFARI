@@ -92,9 +92,18 @@ class PatientProfileSerializer(serializers.ModelSerializer):
 
 class PatientTripRequestSerializer(serializers.ModelSerializer):
     destination_facility_name = serializers.SerializerMethodField()
+    driver_name = serializers.CharField(source="driver.full_name", read_only=True)
+    is_rated = serializers.SerializerMethodField()
+    rating_score = serializers.SerializerMethodField()
 
     def get_destination_facility_name(self, obj):
         return obj.destination_facility.name if obj.destination_facility_id else None
+
+    def get_is_rated(self, obj):
+        return hasattr(obj, "rating")
+
+    def get_rating_score(self, obj):
+        return obj.rating.score if hasattr(obj, "rating") else None
 
     class Meta:
         model = Trip
@@ -120,10 +129,31 @@ class PatientTripRequestSerializer(serializers.ModelSerializer):
             "notes",
             "estimated_fare",
             "estimated_fare_breakdown",
+            "final_fare",
+            "final_fare_breakdown",
+            "distance_km",
+            "duration_minutes",
+            "driver_name",
+            "is_rated",
+            "rating_score",
             "status",
+            "completed_at",
             "created_at",
         )
-        read_only_fields = ("id", "status", "created_at", "destination_facility_name")
+        read_only_fields = (
+            "id",
+            "status",
+            "created_at",
+            "destination_facility_name",
+            "final_fare",
+            "final_fare_breakdown",
+            "distance_km",
+            "duration_minutes",
+            "driver_name",
+            "is_rated",
+            "rating_score",
+            "completed_at",
+        )
 
 
 class PatientSignupSerializer(serializers.Serializer):
