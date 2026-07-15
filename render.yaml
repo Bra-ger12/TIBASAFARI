@@ -15,8 +15,12 @@ services:
         value: "False"
       - key: SECRET_KEY
         generateValue: true
+      # Left empty: settings.py already auto-appends the exact hostname
+      # Render injects via RENDER_EXTERNAL_HOSTNAME at runtime. A wildcard
+      # here (.onrender.com) would accept a Host header from any Render
+      # tenant, not just this service — onrender.com is shared hosting.
       - key: ALLOWED_HOSTS
-        value: ".onrender.com"
+        value: ""
       # Left empty: settings.py already auto-derives the correct
       # https://<RENDER_EXTERNAL_HOSTNAME> trusted origin from the hostname
       # Render injects at runtime. A wildcard here (https://*.onrender.com)
