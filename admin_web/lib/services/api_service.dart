@@ -163,6 +163,11 @@ class ApiService {
               j['message'] as String? ??
               _firstFieldError(j) ??
               msg;
+        } else if (j is List && j.isNotEmpty) {
+          // Service-layer code raises DRF's ValidationError with a bare
+          // string (e.g. TripService.assign_driver's guard clauses), which
+          // DRF serializes as a plain JSON array rather than {"detail": ...}.
+          msg = j.first.toString();
         }
       } catch (_) {}
       throw ApiException(msg, res.statusCode);
