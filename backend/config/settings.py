@@ -122,7 +122,13 @@ ASGI_APPLICATION = "config.asgi.application"
 # managed Postgres instance; local dev still uses the discrete POSTGRES_* vars.
 if env("DATABASE_URL", default=""):
     DATABASES = {"default": env.db_url("DATABASE_URL")}
-    DATABASES["default"]["CONN_MAX_AGE"] = 60
+    # 0 (close after every request) rather than a persistent connection —
+    # Render's free Postgres plan caps total connections very low, and
+    # holding one open per worker thread was exhausting it under any
+    # concurrent load (WS traffic + health checks + API requests), causing
+    # "remaining connection slots are reserved for roles with the SUPERUSER
+    # attribute" errors even on the health check itself.
+    DATABASES["default"]["CONN_MAX_AGE"] = 0
     DATABASES["default"]["OPTIONS"] = {"connect_timeout": 10}
 else:
     DATABASES = {
