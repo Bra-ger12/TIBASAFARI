@@ -14,6 +14,11 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _obscure = true;
   bool _loading = false;
+  bool _showColdStartHint = false;
+
+  static const _coldStartHint =
+      "The server is waking up (this can take up to a minute on Render's "
+      'free tier after a period of inactivity). Please wait and try again.';
 
   static const Color cTeal     = Color(0xFF1D9E75);
   static const Color cTealDark = Color(0xFF14754F);
@@ -34,7 +39,13 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
   Future<void> _login() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _showColdStartHint = false;
+    });
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted && _loading) setState(() => _showColdStartHint = true);
+    });
     try {
       final session = await DriverService.instance.login(
         email: _emailCtrl.text.trim(),
@@ -53,7 +64,12 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _showColdStartHint = false;
+        });
+      }
     }
   }
 
@@ -294,6 +310,14 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
                                 ),
                         ),
                       ),
+                      if (_showColdStartHint) ...[
+                        const SizedBox(height: 10),
+                        const Text(
+                          _coldStartHint,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: cMuted, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ],
                       const SizedBox(height: 22),
 
                       // Terms

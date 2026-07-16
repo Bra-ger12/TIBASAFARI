@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:patient_app/core/config/social_auth_config.dart';
+import 'package:patient_app/core/services/http_timeout.dart';
 import 'package:patient_app/core/services/auth_service.dart';
 import 'package:patient_app/core/services/trip_api_service.dart';
 import 'package:patient_app/screens/dashboard/homepage.dart';
@@ -19,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _showColdStartHint = false;
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email'],
@@ -67,6 +69,29 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.pushNamed(context, '/reset-password');
   }
 
+  /// Render's free-tier backend can take up to ~60s to wake from a cold
+  /// start (see http_timeout.dart). A bare spinner for that long looks
+  /// frozen, so surface a hint once loading has run long enough that it's
+  /// probably a cold start rather than a normal request.
+  void _startLoading() {
+    setState(() {
+      _isLoading = true;
+      _showColdStartHint = false;
+    });
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted && _isLoading) setState(() => _showColdStartHint = true);
+    });
+  }
+
+  void _stopLoading() {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _showColdStartHint = false;
+      });
+    }
+  }
+
   Future<void> _handleLogin() async {
     if (emailController.text.isEmpty || passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -75,8 +100,8 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
-    
+    _startLoading();
+
     try {
       final session = await AuthService().loginUser(
         email: emailController.text,
@@ -107,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      _stopLoading();
     }
   }
 
@@ -118,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       return;
     }
-    setState(() => _isLoading = true);
+    _startLoading();
     try {
       final account = await _googleSignIn.signIn();
       if (account == null) return; // user cancelled
@@ -140,12 +165,12 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      _stopLoading();
     }
   }
 
   Future<void> _handleAppleLogin() async {
-    setState(() => _isLoading = true);
+    _startLoading();
     try {
       final credential = await SignInWithApple.getAppleIDCredential(
         scopes: [
@@ -191,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      _stopLoading();
     }
   }
 
@@ -320,7 +345,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('Continue', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
                       ),
                     ),
-                    
+                    if (_showColdStartHint) ...[
+                      const SizedBox(height: 10),
+                      const Text(
+                        kApiColdStartMessage,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+
                     const SizedBox(height: 22),
                     const Row(children: [Expanded(child: Divider()), Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text('or')), Expanded(child: Divider())]),
                     const SizedBox(height: 18),
