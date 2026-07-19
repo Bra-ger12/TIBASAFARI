@@ -14,9 +14,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.2.2
 
-  # Social sign-in
-  google_sign_in: ^6.2.1
-
   # Secure token storage
   flutter_secure_storage: ^9.2.2
 

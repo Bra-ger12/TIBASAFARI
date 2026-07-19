@@ -86,7 +86,7 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Account created. Please sign in with your new password.',
+              'Account created. Please login with your new password.',
             ),
             backgroundColor: cTeal,
             behavior: SnackBarBehavior.floating,
@@ -535,7 +535,7 @@ class _DriverSignupScreenState extends State<DriverSignupScreen> {
             (route) => false,
           ),
           child: const Text(
-            'Sign in',
+            'Login',
             style: TextStyle(
               color: cTeal,
               fontSize: 13,
