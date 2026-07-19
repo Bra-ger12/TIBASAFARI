@@ -6,18 +6,6 @@ import 'package:patient_app/core/services/notifications_ws_service.dart';
 import 'package:patient_app/core/services/trip_api_service.dart';
 import 'package:patient_app/models/auth_session.dart';
 
-/// Thrown by [AuthService.loginUser] when the backend rejects login with
-/// `error.code == "email_not_verified"` — lets the login screen offer a
-/// "Verify now" action instead of a plain error message.
-class EmailNotVerifiedException implements Exception {
-  final String email;
-  final String message;
-  EmailNotVerifiedException(this.email, this.message);
-
-  @override
-  String toString() => message;
-}
-
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
@@ -85,13 +73,6 @@ class AuthService {
 
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {
-      final err = body['error'];
-      if (err is Map && err['code'] == 'email_not_verified') {
-        throw EmailNotVerifiedException(
-          email.trim().toLowerCase(),
-          _extractError(body, 'Please verify your email before logging in'),
-        );
-      }
       throw Exception(_extractError(body, 'Login failed'));
     }
     return _sessionFromAuthData(body['data'] as Map<String, dynamic>);
@@ -178,10 +159,9 @@ class AuthService {
     }
   }
 
-  /// Creates the account and sends a verification code — the account has
-  /// no usable session until [verifyEmail] succeeds, so no tokens are
-  /// returned here; the caller should navigate to the verify-email screen.
-  Future<void> registerPatient({
+  /// Creates the account and signs the patient straight in — no email
+  /// confirmation step, so the backend returns a usable session immediately.
+  Future<AuthSession> registerPatient({
     required String fullName,
     required String email,
     required String phone,
@@ -216,30 +196,7 @@ class AuthService {
     if (resp.statusCode != 201) {
       throw Exception(_extractError(body, 'Registration failed'));
     }
-  }
-
-  Future<void> verifyEmail({required String email, required String code}) async {
-    final resp = await _withTimeout(http.post(
-      Uri.parse('$_base/auth/verify-email/'),
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: jsonEncode({'email': email.trim().toLowerCase(), 'code': code.trim()}),
-    ));
-    final body = jsonDecode(resp.body) as Map<String, dynamic>;
-    if (resp.statusCode != 200) {
-      throw Exception(_extractError(body, 'Verification failed'));
-    }
-  }
-
-  Future<void> resendVerification({required String email}) async {
-    final resp = await _withTimeout(http.post(
-      Uri.parse('$_base/auth/resend-verification/'),
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: jsonEncode({'email': email.trim().toLowerCase()}),
-    ));
-    final body = jsonDecode(resp.body) as Map<String, dynamic>;
-    if (resp.statusCode != 200) {
-      throw Exception(_extractError(body, 'Could not resend code'));
-    }
+    return _sessionFromAuthData(body['data'] as Map<String, dynamic>);
   }
 
   Future<void> requestPasswordReset({required String email}) async {

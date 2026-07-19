@@ -5,12 +5,9 @@ from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import EmailOTP
 from apps.accounts.serializers import UserSerializer
-from apps.accounts.services import EmailOTPService
 from apps.accounts.social_auth import verify_apple_id_token, verify_google_id_token
 from apps.core.responses import success_response
-from apps.core.throttles import EmailOTPRequestThrottle
 from apps.patients.models import PatientDocument, PatientProfile
 from apps.patients.serializers import (
     AppleAuthSerializer,
@@ -26,29 +23,7 @@ from apps.trips.models import Trip
 from apps.trips.services import TripService
 
 
-class PatientSignupView(APIView):
-    permission_classes = [AllowAny]
-    serializer_class = PatientSignupSerializer
-    throttle_classes = [EmailOTPRequestThrottle]
-    throttle_scope = "email_otp"
-    otp_service = EmailOTPService()
-
-    def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        code = self.otp_service.generate(user, purpose=EmailOTP.Purpose.VERIFY_EMAIL)
-        self.otp_service.send_verification_email(user, code)
-        # No tokens: the account can't be used until the code is verified,
-        # so the client moves straight to the "verify your email" screen.
-        data = {"email": user.email}
-        return success_response(
-            data, "Account created — check your email for a verification code",
-            status=status.HTTP_201_CREATED,
-        )
-
-
-def _social_login_response(user, message: str):
+def _social_login_response(user, message: str, *, status_code: int = status.HTTP_200_OK):
     if not user.is_approved:
         raise exceptions.PermissionDenied("Account is not active")
     refresh = RefreshToken.for_user(user)
@@ -57,7 +32,23 @@ def _social_login_response(user, message: str):
         "refresh": str(refresh),
         "user": UserSerializer(user).data,
     }
-    return success_response(data, message)
+    return success_response(data, message, status=status_code)
+
+
+class PatientSignupView(APIView):
+    permission_classes = [AllowAny]
+    serializer_class = PatientSignupSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        # No email verification step — the account is usable immediately,
+        # so sign the patient straight in instead of making them log in
+        # again right after registering.
+        return _social_login_response(
+            user, "Account created", status_code=status.HTTP_201_CREATED
+        )
 
 
 class GoogleAuthView(APIView):

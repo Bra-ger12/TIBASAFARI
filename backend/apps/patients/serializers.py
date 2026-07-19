@@ -205,7 +205,6 @@ class PatientSignupSerializer(serializers.Serializer):
             password=password,
             status=User.Status.ACTIVE,
             is_active=True,
-            is_email_verified=False,
             **validated_data,
         )
         UserRole.objects.get_or_create(user=user, role=get_or_create_patient_role())

@@ -13,10 +13,8 @@ from apps.accounts.serializers import (
     LogoutSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
-    ResendVerificationSerializer,
     TokenResponseSerializer,
     UserSerializer,
-    VerifyEmailSerializer,
 )
 from apps.accounts.services import AuthService, EmailOTPService, UserService
 from apps.core.responses import success_response
@@ -126,51 +124,6 @@ class PasswordResetConfirmView(APIView):
         user.save(update_fields=["password"])
         _blacklist_all_tokens(user)
         return success_response(message="Password reset successfully")
-
-
-class VerifyEmailView(APIView):
-    permission_classes = [AllowAny]
-    serializer_class = VerifyEmailSerializer
-    otp_service = EmailOTPService()
-
-    @extend_schema(request=VerifyEmailSerializer)
-    def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        try:
-            user = User.objects.get(email__iexact=data["email"])
-        except User.DoesNotExist as exc:
-            raise exceptions.ValidationError("Invalid or expired code") from exc
-        if not self.otp_service.verify(
-            user, purpose=EmailOTP.Purpose.VERIFY_EMAIL, code=data["code"]
-        ):
-            raise exceptions.ValidationError("Invalid or expired code")
-        user.is_email_verified = True
-        user.save(update_fields=["is_email_verified"])
-        return success_response(message="Email verified — you can now sign in")
-
-
-class ResendVerificationView(APIView):
-    permission_classes = [AllowAny]
-    serializer_class = ResendVerificationSerializer
-    throttle_classes = [EmailOTPRequestThrottle]
-    throttle_scope = "email_otp"
-    otp_service = EmailOTPService()
-
-    @extend_schema(request=ResendVerificationSerializer)
-    def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = User.objects.filter(
-            email__iexact=serializer.validated_data["email"], is_email_verified=False
-        ).first()
-        if user is not None:
-            code = self.otp_service.generate(user, purpose=EmailOTP.Purpose.VERIFY_EMAIL)
-            self.otp_service.send_verification_email(user, code)
-        # Same generic response whether the email exists, is already
-        # verified, or genuinely got a new code — avoids account enumeration.
-        return success_response(message="A new code has been sent if the email needs verification")
 
 
 class ProfileView(APIView):

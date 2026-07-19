@@ -6,7 +6,6 @@ from django.utils.crypto import get_random_string
 from rest_framework import exceptions
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.exceptions import EmailNotVerified
 from apps.accounts.models import EmailOTP
 from apps.accounts.repositories import UserRepository
 
@@ -50,14 +49,6 @@ class EmailOTPService:
         otp.save(update_fields=["consumed_at"])
         return True
 
-    def send_verification_email(self, user, code: str):
-        self._send(
-            user,
-            subject="Verify your TibaSafari email",
-            template_name="verification_code",
-            context={"code": code, "full_name": user.full_name, "ttl_minutes": _OTP_TTL_MINUTES},
-        )
-
     def send_password_reset_email(self, user, code: str):
         self._send(
             user,
@@ -79,8 +70,6 @@ class AuthService:
         user = authenticate(email=email, password=password)
         if user is None:
             raise exceptions.AuthenticationFailed("Invalid email or password")
-        if not user.is_email_verified:
-            raise EmailNotVerified()
         if not user.is_approved:
             raise exceptions.PermissionDenied("Account is not active")
 

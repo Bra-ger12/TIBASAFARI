@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:patient_app/core/services/auth_service.dart';
 import 'package:patient_app/core/theme/app_theme.dart';
+import 'package:patient_app/models/auth_session.dart';
+import 'package:patient_app/screens/dashboard/homepage.dart';
 
 class PatientRegisterScreen extends StatefulWidget {
   const PatientRegisterScreen({super.key});
@@ -83,8 +85,9 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
 
     setState(() => _loading = true);
     final email = _emailController.text.trim();
+    final AuthSession session;
     try {
-      await AuthService().registerPatient(
+      session = await AuthService().registerPatient(
         fullName: _nameController.text.trim(),
         email: email,
         phone: _phoneController.text.trim(),
@@ -105,7 +108,10 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
 
     if (!mounted) return;
     setState(() => _loading = false);
-    Navigator.of(context).pushNamedAndRemoveUntil('/verify-email', (route) => false, arguments: email);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => HomeScreen(session: session)),
+      (route) => false,
+    );
   }
 
   String? _validatePassword(String? value) {

@@ -113,18 +113,6 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(builder: (context) => HomeScreen(session: session)),
         );
       }
-    } on EmailNotVerifiedException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            action: SnackBarAction(
-              label: 'Verify now',
-              onPressed: () => Navigator.pushNamed(context, '/verify-email', arguments: e.email),
-            ),
-          ),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

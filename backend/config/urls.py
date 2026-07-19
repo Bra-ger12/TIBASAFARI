@@ -10,8 +10,6 @@ from apps.accounts.views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     ProfileView,
-    ResendVerificationView,
-    VerifyEmailView,
 )
 from apps.core.views import HealthCheckView, SecureMediaView
 
@@ -26,12 +24,6 @@ api_patterns = [
         "auth/password-reset/confirm/",
         PasswordResetConfirmView.as_view(),
         name="password-reset-confirm",
-    ),
-    path("auth/verify-email/", VerifyEmailView.as_view(), name="verify-email"),
-    path(
-        "auth/resend-verification/",
-        ResendVerificationView.as_view(),
-        name="resend-verification",
     ),
     path("auth/profile/", ProfileView.as_view(), name="user-profile"),
     path("accounts/", include("apps.accounts.urls")),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:patient_app/screens/auth/login_screen.dart';
 import 'package:patient_app/screens/auth/registration_screen.dart';
 import 'package:patient_app/screens/auth/reset_password_screen.dart';
-import 'package:patient_app/screens/auth/verify_email_screen.dart';
 import 'package:patient_app/screens/dashboard/homepage.dart';
 import 'package:patient_app/screens/profile/profile_screen.dart';
 import 'package:patient_app/screens/rides/book_ride.dart';
@@ -19,10 +18,6 @@ class AppRouter {
       
       case '/register':
         return MaterialPageRoute(builder: (_) => const PatientRegisterScreen());
-
-      case '/verify-email':
-        final email = settings.arguments as String? ?? '';
-        return MaterialPageRoute(builder: (_) => VerifyEmailScreen(email: email));
 
       case '/reset-password':
         return MaterialPageRoute(builder: (_) => const ResetPasswordScreen());
