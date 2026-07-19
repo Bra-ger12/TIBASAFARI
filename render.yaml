@@ -103,6 +103,18 @@ services:
         value: "8.00"
       - key: FARE_WHEELCHAIR_SURCHARGE
         value: "5.00"
+      # Cloudinary — persistent storage for uploaded driver documents/trip
+      # signatures/proof photos, since Render's web service disk is ephemeral
+      # (wiped on every restart/redeploy). Leaving these unset falls back to
+      # local disk (fine for one-off local dev, not for this deployment).
+      # Set the real values in the Render dashboard: Environment →
+      # tibasafari-backend → CLOUDINARY_CLOUD_NAME / _API_KEY / _API_SECRET.
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
 
   - type: web
     name: tibasafari-admin

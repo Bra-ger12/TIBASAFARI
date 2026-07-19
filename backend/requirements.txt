@@ -25,3 +25,7 @@ geopy>=2.4,<3.0
 # Utilities
 Pillow>=11.0,<13.0
 django-filter>=24.0,<25.0
+
+# Persistent file storage (Render's disk is ephemeral — see MEDIA_ROOT in settings.py)
+django-cloudinary-storage>=0.3,<1.0
+cloudinary>=1.41,<2.0

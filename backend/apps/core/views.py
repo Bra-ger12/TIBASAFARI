@@ -1,10 +1,8 @@
-import os
-
-from django.conf import settings
 from django.core import signing
+from django.core.exceptions import SuspiciousOperation
+from django.core.files.storage import default_storage
 from django.db import connection
-from django.http import Http404
-from django.views.static import serve
+from django.http import FileResponse, Http404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
@@ -27,7 +25,8 @@ class HealthCheckView(APIView):
 
 
 class SecureMediaView(APIView):
-    """Serves a MEDIA_ROOT file only via a short-lived signed token (see
+    """Serves a stored file (local disk in dev, Cloudinary in production —
+    see DEFAULT_FILE_STORAGE) only via a short-lived signed token (see
     apps.core.media) — there is no other way to reach uploaded documents;
     the raw /media/ prefix is not routed at all (see config/urls.py)."""
 
@@ -39,9 +38,9 @@ class SecureMediaView(APIView):
         except signing.BadSignature:
             raise Http404("Link has expired or is invalid.")
 
-        media_root = os.path.abspath(settings.MEDIA_ROOT)
-        full_path = os.path.abspath(os.path.join(media_root, relative_path))
-        if os.path.commonpath([media_root, full_path]) != media_root:
-            raise Http404("Invalid path.")  # path traversal guard
+        try:
+            file = default_storage.open(relative_path, "rb")
+        except (FileNotFoundError, SuspiciousOperation) as exc:
+            raise Http404("File not found.") from exc
 
-        return serve(request, relative_path, document_root=settings.MEDIA_ROOT)
+        return FileResponse(file)

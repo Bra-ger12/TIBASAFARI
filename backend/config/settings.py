@@ -62,7 +62,10 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    # Must come before django.contrib.staticfiles per django-cloudinary-storage's docs.
+    "cloudinary_storage",
     "django.contrib.staticfiles",
+    "cloudinary",
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
@@ -205,6 +208,20 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Render's web service disk is ephemeral (wiped on every restart/redeploy), so
+# uploaded driver documents/trip signatures/proof photos default to Cloudinary
+# instead of local disk whenever credentials are configured. Falls back to
+# local FileSystemStorage (MEDIA_ROOT above) when they're not set, so local
+# dev keeps working without a Cloudinary account.
+CLOUDINARY_CLOUD_NAME = env("CLOUDINARY_CLOUD_NAME", default="")
+if CLOUDINARY_CLOUD_NAME:
+    CLOUDINARY_STORAGE = {
+        "CLOUD_NAME": CLOUDINARY_CLOUD_NAME,
+        "API_KEY": env("CLOUDINARY_API_KEY", default=""),
+        "API_SECRET": env("CLOUDINARY_API_SECRET", default=""),
+    }
+    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
