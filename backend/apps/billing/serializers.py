@@ -168,6 +168,7 @@ class SubmitPaymentSerializer(serializers.Serializer):
     invoice balance; only staff confirming via record_payment does that."""
 
     PATIENT_METHODS = (
+        Payment.Method.CASH,
         Payment.Method.MOBILE_MONEY,
         Payment.Method.BANK_TRANSFER,
         Payment.Method.CARD,
@@ -175,7 +176,7 @@ class SubmitPaymentSerializer(serializers.Serializer):
 
     amount = serializers.DecimalField(max_digits=10, decimal_places=2)
     method = serializers.ChoiceField(choices=[(m, m.label) for m in PATIENT_METHODS])
-    reference = serializers.CharField(max_length=120)
+    reference = serializers.CharField(max_length=120, required=False, allow_blank=True)
     notes = serializers.CharField(default="", allow_blank=True)
 
     def validate_amount(self, value):
@@ -183,12 +184,15 @@ class SubmitPaymentSerializer(serializers.Serializer):
             raise serializers.ValidationError("Amount must be greater than zero")
         return value
 
-    def validate_reference(self, value):
-        if not value.strip():
+    def validate(self, attrs):
+        # Cash has no confirmation code to check, unlike the other methods —
+        # only require a reference for non-cash payments.
+        if attrs.get("method") != Payment.Method.CASH and not attrs.get("reference", "").strip():
             raise serializers.ValidationError(
-                "A payment reference (e.g. M-Pesa confirmation code) is required"
+                {"reference": "A payment reference (e.g. M-Pesa confirmation code) is required"}
             )
-        return value.strip()
+        attrs["reference"] = attrs.get("reference", "").strip()
+        return attrs
 
 
 class GenerateInvoiceSerializer(serializers.Serializer):

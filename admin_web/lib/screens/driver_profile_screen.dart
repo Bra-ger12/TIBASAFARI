@@ -77,6 +77,11 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           ),
           actions: [
             StatusBadge(tone: meta.tone, label: meta.label, dot: true),
+            IconButton(
+              tooltip: 'Refresh',
+              onPressed: _reload,
+              icon: const Icon(Icons.refresh, size: 20),
+            ),
             OutlinedButton.icon(
               onPressed: () => _showVehicleDialog(d),
               icon: const Icon(Icons.directions_car, size: 16),

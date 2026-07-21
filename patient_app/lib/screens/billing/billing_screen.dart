@@ -450,6 +450,7 @@ class _SubmitPaymentSheet extends StatefulWidget {
 
 class _SubmitPaymentSheetState extends State<_SubmitPaymentSheet> {
   static const _methods = [
+    ('CASH', 'Cash', Icons.payments_rounded),
     ('MOBILE_MONEY', 'M-Pesa / Mobile Money', Icons.smartphone_rounded),
     ('BANK_TRANSFER', 'Bank Transfer', Icons.account_balance_rounded),
     ('CARD', 'Card', Icons.credit_card_rounded),
@@ -482,7 +483,7 @@ class _SubmitPaymentSheetState extends State<_SubmitPaymentSheet> {
       setState(() => _error = 'Enter a valid amount');
       return;
     }
-    if (_referenceCtrl.text.trim().isEmpty) {
+    if (_method != 'CASH' && _referenceCtrl.text.trim().isEmpty) {
       setState(() => _error = 'A payment reference (e.g. M-Pesa code) is required');
       return;
     }
@@ -559,8 +560,10 @@ class _SubmitPaymentSheetState extends State<_SubmitPaymentSheet> {
 
               _field(label: 'Amount (TZS)', ctrl: _amountCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
               const SizedBox(height: 14),
-              _field(label: 'Payment Reference', ctrl: _referenceCtrl, hint: 'e.g. M-Pesa confirmation code'),
-              const SizedBox(height: 14),
+              if (_method != 'CASH') ...[
+                _field(label: 'Payment Reference', ctrl: _referenceCtrl, hint: 'e.g. M-Pesa confirmation code'),
+                const SizedBox(height: 14),
+              ],
               _field(label: 'Notes (optional)', ctrl: _notesCtrl, maxLines: 2),
 
               if (_error != null) ...[
