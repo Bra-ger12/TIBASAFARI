@@ -195,6 +195,7 @@ class TripViewSet(viewsets.ModelViewSet):
 class RecurringScheduleViewSet(viewsets.ModelViewSet):
     serializer_class = RecurringScheduleSerializer
     permission_classes = [RBACPermission]
+    service = TripService()
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["created_at", "start_date"]
     permission_map = {
@@ -212,4 +213,33 @@ class RecurringScheduleViewSet(viewsets.ModelViewSet):
         return RecurringSchedule.objects.filter(patient=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(patient=self.request.user)
+        schedule = serializer.save(patient=self.request.user)
+        # There is no periodic job that turns a RecurringSchedule into Trip
+        # rows over time (no worker/beat service is deployed — see
+        # render.yaml) — without this, the schedule is just a standalone
+        # record dispatch can never see or act on. Booking the first
+        # occurrence immediately at least gives dispatch a real trip to
+        # assign a driver to; later occurrences still need a driver
+        # assigned by hand each time until a real scheduler exists.
+        from datetime import datetime
+
+        from django.utils import timezone
+
+        naive_scheduled_at = datetime.combine(schedule.start_date, schedule.pickup_time)
+        scheduled_at = (
+            timezone.make_aware(naive_scheduled_at)
+            if timezone.is_naive(naive_scheduled_at)
+            else naive_scheduled_at
+        )
+        self.service.create_trip(
+            patient=schedule.patient,
+            recurring_schedule=schedule,
+            pickup_address=schedule.pickup_address,
+            destination_address=schedule.destination_address,
+            pickup_latitude=schedule.pickup_latitude,
+            pickup_longitude=schedule.pickup_longitude,
+            destination_latitude=schedule.destination_latitude,
+            destination_longitude=schedule.destination_longitude,
+            scheduled_at=scheduled_at,
+            special_requirements=schedule.special_requirements,
+        )

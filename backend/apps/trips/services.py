@@ -116,6 +116,11 @@ class TripService:
 
     def create_trip(self, *, patient, **data):
         trip = Trip.objects.create(patient=patient, **data)
+        # Without this, a brand-new REQUESTED trip is invisible to the admin
+        # dispatch dashboard's live map until some *later* status change
+        # (e.g. assign_driver) triggers a push — dispatch would have to
+        # manually refresh the pending-trips list to ever notice it.
+        _push_trip_status(trip)
         _notify(
             patient,
             "Trip Requested",
