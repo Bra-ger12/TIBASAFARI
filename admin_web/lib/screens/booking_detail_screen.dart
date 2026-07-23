@@ -154,6 +154,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                 InfoRow(
                     label: 'Scheduled',
                     value: Text(formatDate(b.scheduledAt, withTime: true))),
+                if (b.recurring != null)
+                  InfoRow(
+                      label: 'Recurring',
+                      value: Text(b.recurring!.frequencyDisplay,
+                          style: const TextStyle(fontWeight: FontWeight.w600))),
                 InfoRow(
                     label: 'Fare',
                     value: Text(formatCurrency(b.fare),

@@ -59,6 +59,7 @@ class DriverAssignedTrip {
   final double? estimatedFare;
   final double? finalFare;
   final DateTime? completedAt;
+  final String? recurringFrequencyDisplay;
 
   const DriverAssignedTrip({
     required this.id,
@@ -77,6 +78,7 @@ class DriverAssignedTrip {
     this.estimatedFare,
     this.finalFare,
     this.completedAt,
+    this.recurringFrequencyDisplay,
   });
 
   /// The real completed fare when available, falling back to the
@@ -100,6 +102,7 @@ class DriverAssignedTrip {
     double? estimatedFare,
     double? finalFare,
     DateTime? completedAt,
+    String? recurringFrequencyDisplay,
   }) {
     return DriverAssignedTrip(
       id: id ?? this.id,
@@ -118,6 +121,8 @@ class DriverAssignedTrip {
       estimatedFare: estimatedFare ?? this.estimatedFare,
       finalFare: finalFare ?? this.finalFare,
       completedAt: completedAt ?? this.completedAt,
+      recurringFrequencyDisplay:
+          recurringFrequencyDisplay ?? this.recurringFrequencyDisplay,
     );
   }
 

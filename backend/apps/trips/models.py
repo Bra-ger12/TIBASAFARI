@@ -155,6 +155,10 @@ class Trip(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Set once send_recurring_trip_reminders has notified the assigned driver
+    # about this occurrence, so the daily job doesn't re-notify on rerun.
+    driver_reminder_sent_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ("-scheduled_at",)
         indexes = [

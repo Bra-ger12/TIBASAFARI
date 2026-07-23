@@ -1,11 +1,11 @@
 from django.contrib import admin
 
-from apps.trips.models import Trip, TripRating
+from apps.trips.models import RecurringSchedule, Trip, TripRating
 
 
 @admin.register(Trip)
 class TripAdmin(admin.ModelAdmin):
-    list_display = ("id", "patient", "driver", "status", "scheduled_at")
+    list_display = ("id", "patient", "driver", "status", "scheduled_at", "is_recurring")
     list_filter = ("status", "scheduled_at")
     search_fields = (
         "patient__email",
@@ -13,7 +13,19 @@ class TripAdmin(admin.ModelAdmin):
         "pickup_address",
         "destination_address",
     )
-    list_select_related = ("patient", "driver")
+    list_select_related = ("patient", "driver", "recurring_schedule")
+
+    @admin.display(boolean=True, description="Recurring")
+    def is_recurring(self, obj):
+        return obj.recurring_schedule_id is not None
+
+
+@admin.register(RecurringSchedule)
+class RecurringScheduleAdmin(admin.ModelAdmin):
+    list_display = ("id", "patient", "frequency", "start_date", "end_date", "is_active", "last_generated_date")
+    list_filter = ("frequency", "is_active")
+    search_fields = ("patient__email", "pickup_address", "destination_address")
+    list_select_related = ("patient",)
 
 
 @admin.register(TripRating)

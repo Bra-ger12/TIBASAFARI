@@ -159,6 +159,22 @@ class TripService:
             special_requirements=schedule.special_requirements,
         )
 
+    def send_driver_reminder(self, trip):
+        """Notify the assigned driver a day ahead of a recurring trip's
+        pickup (see send_recurring_trip_reminders) — recurring occurrences
+        are booked automatically, so without this the driver's first
+        indication of the ride is whatever they happen to notice in their
+        assigned-trips list."""
+        _notify(
+            trip.driver,
+            "Recurring Ride Tomorrow",
+            f"You have a recurring ride scheduled for tomorrow at "
+            f"{trip.scheduled_at.strftime('%b %d, %Y %H:%M')} — pickup at {trip.pickup_address}.",
+            {"trip_id": str(trip.id)},
+        )
+        trip.driver_reminder_sent_at = timezone.now()
+        trip.save(update_fields=["driver_reminder_sent_at"])
+
     @transaction.atomic
     def assign_driver(self, trip, *, driver):
         trip = Trip.objects.select_for_update().get(pk=trip.pk)

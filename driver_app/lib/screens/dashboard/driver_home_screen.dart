@@ -1693,6 +1693,11 @@ class _TripSheet extends StatelessWidget {
               const SizedBox(height: 10),
               _DetailRow(Icons.schedule_rounded, 'Pickup Time',
                   trip.pickupTime, cAmber),
+              if (trip.recurringFrequencyDisplay != null) ...[
+                const SizedBox(height: 10),
+                _DetailRow(Icons.repeat_rounded, 'Recurring',
+                    trip.recurringFrequencyDisplay!, cTeal),
+              ],
               if (trip.specialRequirements.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 _DetailRow(Icons.warning_amber_rounded, 'Requirements',

@@ -309,6 +309,42 @@ class PatientDocument {
   }
 }
 
+/// A RecurringSchedule's pattern, nested onto a Trip/Booking as
+/// `recurring_schedule_detail` so admin can tell at a glance that a ride
+/// isn't a one-off booking.
+class RecurringInfo {
+  final String frequency;
+  final String frequencyDisplay;
+  final List<int> daysOfWeek;
+  final String? pickupTime;
+  final String? startDate;
+  final String? endDate;
+
+  RecurringInfo({
+    required this.frequency,
+    required this.frequencyDisplay,
+    required this.daysOfWeek,
+    this.pickupTime,
+    this.startDate,
+    this.endDate,
+  });
+
+  static RecurringInfo? fromJson(dynamic j) {
+    if (j is! Map<String, dynamic>) return null;
+    return RecurringInfo(
+      frequency: j['frequency'] as String? ?? '',
+      frequencyDisplay: j['frequency_display'] as String? ?? '',
+      daysOfWeek: (j['days_of_week'] as List?)
+              ?.map((e) => (e as num).toInt())
+              .toList() ??
+          const [],
+      pickupTime: j['pickup_time'] as String?,
+      startDate: j['start_date'] as String?,
+      endDate: j['end_date'] as String?,
+    );
+  }
+}
+
 /// A trip request/booking. In the Django backend, "bookings" are trips
 /// with status REQUESTED; all trips live at /api/v1/trips/.
 class Booking {
@@ -334,6 +370,7 @@ class Booking {
   final Driver? driver;
   final String driverName;
   final String createdAt;
+  final RecurringInfo? recurring;
 
   Booking({
     required this.id,
@@ -358,6 +395,7 @@ class Booking {
     this.driver,
     this.driverName = '',
     required this.createdAt,
+    this.recurring,
   });
 
   factory Booking.fromJson(Map<String, dynamic> j) => Booking(
@@ -409,6 +447,7 @@ class Booking {
         createdAt: j['created_at'] as String? ??
             j['createdAt'] as String? ??
             '',
+        recurring: RecurringInfo.fromJson(j['recurring_schedule_detail']),
       );
 }
 
@@ -442,6 +481,7 @@ class Trip {
   final String? mobilityAid;
   final String? serviceLevel;
   final String createdAt;
+  final RecurringInfo? recurring;
 
   Trip({
     required this.id,
@@ -473,6 +513,7 @@ class Trip {
     this.mobilityAid,
     this.serviceLevel,
     required this.createdAt,
+    this.recurring,
   });
 
   factory Trip.fromJson(Map<String, dynamic> j) => Trip(
@@ -545,6 +586,7 @@ class Trip {
         createdAt: j['created_at'] as String? ??
             j['createdAt'] as String? ??
             '',
+        recurring: RecurringInfo.fromJson(j['recurring_schedule_detail']),
       );
 }
 

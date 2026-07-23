@@ -527,6 +527,10 @@ class ApiDriverDataSource implements DriverDataSource {
       estimatedFare: _doubleValue(json['estimated_fare']),
       finalFare: _doubleValue(json['final_fare']),
       completedAt: DateTime.tryParse(_stringValue(json['completed_at']) ?? ''),
+      recurringFrequencyDisplay: _stringValue(
+        (json['recurring_schedule_detail']
+            as Map<String, dynamic>?)?['frequency_display'],
+      ),
     );
   }
 

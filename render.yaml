@@ -200,6 +200,58 @@ services:
       - key: DEFAULT_FROM_EMAIL
         value: "Tiba Safari <braytonroger@gmail.com>"
 
+  # Notifies drivers a day ahead about recurring trips they're already
+  # assigned to (see apps/trips/management/commands/send_recurring_trip_reminders.py).
+  # Runs on the same daily schedule as tibasafari-recurring-trips above — a
+  # driver assigned later the same day won't be reminded until the next run.
+  - type: cron
+    name: tibasafari-recurring-trip-reminders
+    runtime: python
+    plan: starter
+    rootDir: backend
+    schedule: "0 3 * * *"
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python manage.py send_recurring_trip_reminders"
+    envVars:
+      - key: DJANGO_ENV
+        value: production
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: ""
+      - key: CSRF_TRUSTED_ORIGINS
+        value: ""
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tibasafari-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: tibasafari-redis
+          property: connectionString
+      - key: CHANNEL_LAYERS_REDIS_URL
+        fromService:
+          type: redis
+          name: tibasafari-redis
+          property: connectionString
+      - key: EMAIL_BACKEND
+        value: "django.core.mail.backends.smtp.EmailBackend"
+      - key: EMAIL_HOST
+        value: "smtp.gmail.com"
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "True"
+      - key: EMAIL_HOST_USER
+        value: "braytonroger@gmail.com"
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        value: "Tiba Safari <braytonroger@gmail.com>"
+
 databases:
   - name: tibasafari-db
     plan: free

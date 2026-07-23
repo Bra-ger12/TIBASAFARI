@@ -6,6 +6,14 @@ from apps.rbac.permissions import has_role
 from apps.trips.models import RecurringSchedule, Trip, TripMessage, TripRating
 
 
+class RecurringScheduleSummarySerializer(serializers.ModelSerializer):
+    frequency_display = serializers.CharField(source="get_frequency_display", read_only=True)
+
+    class Meta:
+        model = RecurringSchedule
+        fields = ("id", "frequency", "frequency_display", "days_of_week", "pickup_time", "start_date", "end_date")
+
+
 class TripSerializer(serializers.ModelSerializer):
     patient_name = serializers.CharField(source="patient.full_name", read_only=True)
     patient_email = serializers.EmailField(source="patient.email", read_only=True)
@@ -24,6 +32,7 @@ class TripSerializer(serializers.ModelSerializer):
     is_rated = serializers.SerializerMethodField()
     rating_score = serializers.SerializerMethodField()
     destination_facility_name = serializers.SerializerMethodField()
+    recurring_schedule_detail = RecurringScheduleSummarySerializer(source="recurring_schedule", read_only=True)
 
     def get_is_rated(self, obj):
         return hasattr(obj, "rating")
@@ -49,6 +58,7 @@ class TripSerializer(serializers.ModelSerializer):
             "driver_vehicle_model",
             "driver_vehicle_registration",
             "recurring_schedule",
+            "recurring_schedule_detail",
             "pickup_address",
             "destination_address",
             "destination_facility",
@@ -109,6 +119,7 @@ class TripSerializer(serializers.ModelSerializer):
             "is_rated",
             "rating_score",
             "destination_facility_name",
+            "recurring_schedule_detail",
         )
 
     def to_representation(self, instance):
