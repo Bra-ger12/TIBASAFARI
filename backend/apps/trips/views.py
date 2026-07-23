@@ -214,32 +214,12 @@ class RecurringScheduleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         schedule = serializer.save(patient=self.request.user)
-        # There is no periodic job that turns a RecurringSchedule into Trip
-        # rows over time (no worker/beat service is deployed — see
-        # render.yaml) — without this, the schedule is just a standalone
-        # record dispatch can never see or act on. Booking the first
-        # occurrence immediately at least gives dispatch a real trip to
-        # assign a driver to; later occurrences still need a driver
-        # assigned by hand each time until a real scheduler exists.
-        from datetime import datetime
-
-        from django.utils import timezone
-
-        naive_scheduled_at = datetime.combine(schedule.start_date, schedule.pickup_time)
-        scheduled_at = (
-            timezone.make_aware(naive_scheduled_at)
-            if timezone.is_naive(naive_scheduled_at)
-            else naive_scheduled_at
-        )
-        self.service.create_trip(
-            patient=schedule.patient,
-            recurring_schedule=schedule,
-            pickup_address=schedule.pickup_address,
-            destination_address=schedule.destination_address,
-            pickup_latitude=schedule.pickup_latitude,
-            pickup_longitude=schedule.pickup_longitude,
-            destination_latitude=schedule.destination_latitude,
-            destination_longitude=schedule.destination_longitude,
-            scheduled_at=scheduled_at,
-            special_requirements=schedule.special_requirements,
-        )
+        # Book the first occurrence synchronously so dispatch has something
+        # to see/assign immediately, rather than waiting for the next
+        # generate_recurring_trips cron run (see that management command
+        # for how later occurrences get booked).
+        self.service.book_recurring_occurrence(schedule, schedule.start_date)
+        # Cursor for generate_recurring_trips — without this it would
+        # re-book start_date as if it were still unbooked.
+        schedule.last_generated_date = schedule.start_date
+        schedule.save(update_fields=["last_generated_date"])

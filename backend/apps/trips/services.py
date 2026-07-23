@@ -7,6 +7,7 @@ After each state transition:
   3. An email is queued (fire-and-forget via thread to not block the request).
 """
 import threading
+from datetime import date, datetime
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -134,6 +135,29 @@ class TripService:
             patient.email,
         )
         return trip
+
+    def book_recurring_occurrence(self, schedule, occurrence_date: date):
+        """Create the Trip for one occurrence of a RecurringSchedule (used both
+        for the first occurrence, booked synchronously on schedule creation,
+        and for later occurrences booked by generate_recurring_trips)."""
+        naive_scheduled_at = datetime.combine(occurrence_date, schedule.pickup_time)
+        scheduled_at = (
+            timezone.make_aware(naive_scheduled_at)
+            if timezone.is_naive(naive_scheduled_at)
+            else naive_scheduled_at
+        )
+        return self.create_trip(
+            patient=schedule.patient,
+            recurring_schedule=schedule,
+            pickup_address=schedule.pickup_address,
+            destination_address=schedule.destination_address,
+            pickup_latitude=schedule.pickup_latitude,
+            pickup_longitude=schedule.pickup_longitude,
+            destination_latitude=schedule.destination_latitude,
+            destination_longitude=schedule.destination_longitude,
+            scheduled_at=scheduled_at,
+            special_requirements=schedule.special_requirements,
+        )
 
     @transaction.atomic
     def assign_driver(self, trip, *, driver):

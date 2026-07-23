@@ -33,6 +33,11 @@ class RecurringSchedule(models.Model):
     is_active = models.BooleanField(default=True)
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
+    # Cursor for generate_recurring_trips: the last occurrence date a Trip
+    # was already booked for. Set to start_date as soon as the first trip
+    # is booked (see RecurringScheduleViewSet.perform_create), so the daily
+    # job knows to look strictly after this date rather than re-booking it.
+    last_generated_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
