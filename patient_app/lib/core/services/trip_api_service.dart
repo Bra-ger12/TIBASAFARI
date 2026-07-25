@@ -424,6 +424,7 @@ class TripApiService {
       'distance_km': t['distance_km'],
       'duration_minutes': t['duration_minutes'],
       'driver_name': t['driver_name'],
+      'driver_phone': t['driver_phone'],
     };
   }
 

@@ -6,6 +6,7 @@ import '../../core/theme/colors.dart';
 import '../../routes/app_routes.dart';
 import '../../services/auth_storage.dart';
 import '../../services/driver_service.dart';
+import '../../services/live_trip_broadcaster.dart';
 import '../../services/location_service.dart';
 import '../../services/notifications_ws_service.dart';
 import '../../services/offline_queue_service.dart';
@@ -64,6 +65,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
   void dispose() {
     _entryCtrl.dispose();
     _notifSub?.cancel();
+    LiveTripBroadcaster.instance.stop();
     super.dispose();
   }
 
@@ -113,6 +115,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
       // refresh already picked up a newly assigned trip).
       if (mounted && generation == _refreshGeneration) {
         setState(() => _session = updated);
+        _syncLiveBroadcast();
       }
     } catch (e) {
       if (mounted && generation == _refreshGeneration) {
@@ -123,6 +126,31 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
         setState(() => _loading = false);
       }
     }
+  }
+
+  /// Starts (or stops) live location sharing based on whether the driver
+  /// currently has an active trip, so a position keeps streaming to the
+  /// patient/dispatch from any screen — not only while the Live Map is open.
+  Future<void> _syncLiveBroadcast() async {
+    final activeTrip =
+        _session.assignedTrips.cast<DriverAssignedTrip?>().firstWhere(
+              (t) =>
+                  t!.status == TripAssignmentStatus.accepted ||
+                  t.status == TripAssignmentStatus.inProgress ||
+                  t.status == TripAssignmentStatus.arrived,
+              orElse: () => null,
+            );
+    if (activeTrip == null) {
+      if (LiveTripBroadcaster.instance.activeTripId != null) {
+        LiveTripBroadcaster.instance.stop();
+      }
+      return;
+    }
+    if (LiveTripBroadcaster.instance.activeTripId == activeTrip.id) return;
+    final token = await AuthStorage.instance.getAccessToken();
+    if (token == null || !mounted) return;
+    LiveTripBroadcaster.instance
+        .start(tripId: activeTrip.id, token: token, wsBaseUrl: _wsBase);
   }
 
   Future<void> _toggleOnline() async {
@@ -159,6 +187,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
       final trips =
           _session.assignedTrips.map((t) => t.id == tripId ? updated : t).toList();
       setState(() => _session = _session.copyWith(assignedTrips: trips));
+      _syncLiveBroadcast();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Trip accepted!',

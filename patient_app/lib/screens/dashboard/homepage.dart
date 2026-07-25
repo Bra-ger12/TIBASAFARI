@@ -124,7 +124,15 @@ class _HomeScreenState extends State<HomeScreen>
                 onPressed: () => Navigator.pushNamed(
                   context,
                   '/track-ride',
-                  arguments: {'rideId': tripId},
+                  arguments: {
+                    'rideId': tripId,
+                    if (driverName != null && driverName.isNotEmpty)
+                      'driverName': driverName,
+                    if (driverPhone != null && driverPhone.isNotEmpty)
+                      'driverPhone': driverPhone,
+                    if (vehicle != null && vehicle.isNotEmpty)
+                      'vehicleNumber': vehicle,
+                  },
                 ),
               )
             : null,
@@ -163,10 +171,17 @@ class _HomeScreenState extends State<HomeScreen>
       );
 
   void _navigateToTracking(Map<String, dynamic> trip) {
+    final driverName = (trip['driver_name'] ?? '').toString();
+    final driverPhone = (trip['driver_phone'] ?? '').toString();
     Navigator.pushNamed(context, '/track-ride', arguments: {
       'rideId': (trip['id'] ?? '').toString(),
       'pickupLocation': (trip['pickup'] ?? '').toString(),
       'destination': (trip['destination'] ?? '').toString(),
+      // Seed the tracking screen with the driver we already know about so the
+      // real name shows immediately, instead of the "Not assigned" placeholder
+      // flashing until the screen's own /trips/{id}/ refetch returns.
+      if (driverName.isNotEmpty) 'driverName': driverName,
+      if (driverPhone.isNotEmpty) 'driverPhone': driverPhone,
     });
   }
 

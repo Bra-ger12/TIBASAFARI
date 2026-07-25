@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/models/driver_session.dart';
 import '../../core/theme/colors.dart';
 import '../../services/driver_service.dart';
+import '../../services/live_trip_broadcaster.dart';
 import '../../services/location_service.dart';
 import '../../services/offline_queue_service.dart';
 import '../../services/trip_ws_service.dart';
@@ -56,8 +57,8 @@ class _ActiveTripMapScreenState extends State<ActiveTripMapScreen> {
   void initState() {
     super.initState();
     _status = widget.trip.status;
-    _startTracking();
-    _connectWebSocket();
+    _startLocationSharing();
+    _observeTripSocket();
     _resolveStops();
   }
 
@@ -89,11 +90,19 @@ class _ActiveTripMapScreenState extends State<ActiveTripMapScreen> {
     }
   }
 
-  void _startTracking() async {
+  void _startLocationSharing() async {
     _locationErrorSub = LocationService.instance.trackingErrorStream.listen((result) {
       if (mounted) _showLocationPermissionDialog(result);
     });
-    LocationService.instance.startTracking();
+    // Broadcasting (GPS stream + socket) is owned by LiveTripBroadcaster so it
+    // survives leaving this screen — the dashboard keeps it alive while the
+    // trip is active. Ensure it's running (idempotent) in case the map was
+    // opened directly, then just *observe* the shared location for display.
+    LiveTripBroadcaster.instance.start(
+      tripId: widget.trip.id,
+      token: widget.token,
+      wsBaseUrl: _wsBase,
+    );
     _locationSub = LocationService.instance.stream.listen((pos) {
       final ll = LatLng(pos.latitude, pos.longitude);
       if (_driverLatLng != null) {
@@ -105,7 +114,6 @@ class _ActiveTripMapScreenState extends State<ActiveTripMapScreen> {
         );
       }
       setState(() => _driverLatLng = ll);
-      TripWsService.instance.sendLocation(pos.latitude, pos.longitude);
       _mapController.future.then((c) => c.animateCamera(
             CameraUpdate.newLatLng(ll),
           ));
@@ -118,12 +126,9 @@ class _ActiveTripMapScreenState extends State<ActiveTripMapScreen> {
     }
   }
 
-  void _connectWebSocket() {
-    TripWsService.instance.connect(
-      tripId: widget.trip.id,
-      token: widget.token,
-      wsBaseUrl: _wsBase,
-    );
+  void _observeTripSocket() {
+    // The connection itself is owned by LiveTripBroadcaster; here we only
+    // listen for status pushes on the shared (broadcast) stream.
     _wsSub = TripWsService.instance.statusStream.listen((status) {
       final parsed = TripAssignmentStatus.values.firstWhere(
         (s) => s.name.toUpperCase() == status.toUpperCase(),
@@ -135,11 +140,13 @@ class _ActiveTripMapScreenState extends State<ActiveTripMapScreen> {
 
   @override
   void dispose() {
+    // Only detach this screen's observers. Broadcasting (GPS + socket) is
+    // owned by LiveTripBroadcaster and must keep running after we leave, so
+    // the patient/dispatch don't lose the driver's dot the moment the driver
+    // backs out of the map. The dashboard stops it when the trip ends.
     _locationSub?.cancel();
     _wsSub?.cancel();
     _locationErrorSub?.cancel();
-    LocationService.instance.stopTracking();
-    TripWsService.instance.disconnect();
     super.dispose();
   }
 
@@ -173,7 +180,10 @@ class _ActiveTripMapScreenState extends State<ActiveTripMapScreen> {
             onPressed: () {
               Navigator.pop(ctx);
               if (canRetry) {
-                _startTracking();
+                // Re-attempt permission + GPS; the broadcaster and this
+                // screen both observe the shared stream, so both resume once
+                // it's granted.
+                LocationService.instance.startTracking();
               } else if (result == LocationPermissionResult.serviceDisabled) {
                 Geolocator.openLocationSettings();
               } else {

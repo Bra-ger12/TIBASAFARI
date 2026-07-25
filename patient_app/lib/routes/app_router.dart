@@ -52,6 +52,9 @@ class AppRouter {
             rideId: args?['rideId'],
             pickupLocation: args?['pickupLocation'],
             destination: args?['destination'],
+            driverName: args?['driverName'],
+            driverPhone: args?['driverPhone'],
+            vehicleNumber: args?['vehicleNumber'],
           ),
         );
       

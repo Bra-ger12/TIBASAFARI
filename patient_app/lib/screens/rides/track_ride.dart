@@ -89,9 +89,12 @@ class _TrackRideScreenState extends State<TrackRideScreen>
         ),
       );
     });
-    _driverName = widget.driverName;
-    _driverPhone = widget.driverPhone;
-    _vehicleLabel = widget.vehicleNumber;
+    // Normalise empty strings to null so the placeholder/fallback logic (and
+    // the avatar-initial lookup, which would crash on an empty string) treats
+    // "not provided" and "" the same way.
+    _driverName = _nullIfEmpty(widget.driverName);
+    _driverPhone = _nullIfEmpty(widget.driverPhone);
+    _vehicleLabel = _nullIfEmpty(widget.vehicleNumber);
     _connectTracking();
     _loadTripDetails();
     AuthSession.load().then((session) {
@@ -562,6 +565,9 @@ class _TrackRideScreenState extends State<TrackRideScreen>
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  String? _nullIfEmpty(String? value) =>
+      (value == null || value.isEmpty) ? null : value;
 
   String _statusLabel() {
     switch (_tripStatus) {
