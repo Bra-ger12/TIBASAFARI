@@ -226,31 +226,31 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
           RadioGroup<String>(
             groupValue: _mobilityNeeds,
             onChanged: (value) => setState(() => _mobilityNeeds = value!),
-            child: Column(
+            child: const Column(
               children: [
                 RadioListTile<String>(
                   value: 'NONE',
                   activeColor: AppColors.primary,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('None'),
+                  title: Text('None'),
                 ),
                 RadioListTile<String>(
                   value: 'WHEELCHAIR',
                   activeColor: AppColors.primary,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Wheelchair'),
+                  title: Text('Wheelchair'),
                 ),
                 RadioListTile<String>(
                   value: 'STRETCHER',
                   activeColor: AppColors.primary,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Stretcher'),
+                  title: Text('Stretcher'),
                 ),
                 RadioListTile<String>(
                   value: 'WALKER_CRUTCHES',
                   activeColor: AppColors.primary,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Walker / Crutches'),
+                  title: Text('Walker / Crutches'),
                 ),
               ],
             ),
