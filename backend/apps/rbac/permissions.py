@@ -1,4 +1,28 @@
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.permissions import BasePermission
+
+PATIENT_PERMISSION_CODES = {
+    "create_trip",
+    "view_own_trips",
+    "cancel_trip",
+    "trip_messages",
+    "view_own_profile",
+    "view_notifications",
+}
+
+
+def _ensure_patient_role_if_applicable(user, permission_code: str) -> None:
+    if permission_code not in PATIENT_PERMISSION_CODES:
+        return
+    try:
+        user.patient_profile
+    except ObjectDoesNotExist:
+        return
+
+    from apps.patients.services import get_or_create_patient_role
+    from apps.rbac.models import UserRole
+
+    UserRole.objects.get_or_create(user=user, role=get_or_create_patient_role())
 
 
 def has_permission(user, permission_code: str) -> bool:
@@ -6,6 +30,11 @@ def has_permission(user, permission_code: str) -> bool:
         return False
     if user.is_superuser:
         return True
+    if user.role_assignments.filter(
+        role__permissions__code=permission_code,
+    ).exists():
+        return True
+    _ensure_patient_role_if_applicable(user, permission_code)
     return user.role_assignments.filter(
         role__permissions__code=permission_code,
     ).exists()
