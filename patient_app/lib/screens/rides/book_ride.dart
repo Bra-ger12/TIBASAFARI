@@ -161,7 +161,8 @@ class _BookRideScreenState extends State<BookRideScreen> {
       lastDate: DateTime.now().add(const Duration(days: 180)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: cTeal, onPrimary: Colors.white),
+          colorScheme:
+              const ColorScheme.light(primary: cTeal, onPrimary: Colors.white),
         ),
         child: child!,
       ),
@@ -173,7 +174,8 @@ class _BookRideScreenState extends State<BookRideScreen> {
     );
     if (time == null) return;
     setState(() {
-      _scheduledAt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      _scheduledAt =
+          DateTime(date.year, date.month, date.day, time.hour, time.minute);
     });
   }
 
@@ -184,7 +186,9 @@ class _BookRideScreenState extends State<BookRideScreen> {
       _snack('Please select a pickup date & time', isError: true);
       return;
     }
-    if (_isRecurring && _frequency == 'WEEKLY' && !_daysSelected.contains(true)) {
+    if (_isRecurring &&
+        _frequency == 'WEEKLY' &&
+        !_daysSelected.contains(true)) {
       _snack('Please select at least one day of the week', isError: true);
       return;
     }
@@ -195,7 +199,8 @@ class _BookRideScreenState extends State<BookRideScreen> {
         await TripApiService.instance.createRecurringSchedule(
           pickupAddress: _pickupCtrl.text.trim(),
           destinationAddress: _destCtrl.text.trim(),
-          pickupTime: '${_scheduledAt!.hour.toString().padLeft(2, '0')}:${_scheduledAt!.minute.toString().padLeft(2, '0')}',
+          pickupTime:
+              '${_scheduledAt!.hour.toString().padLeft(2, '0')}:${_scheduledAt!.minute.toString().padLeft(2, '0')}',
           frequency: _frequency,
           startDate: DateFormat('yyyy-MM-dd').format(_scheduledAt!),
           daysOfWeek: _daysSelected
@@ -396,12 +401,35 @@ class _BookRideScreenState extends State<BookRideScreen> {
     ));
   }
 
+  bool get _hasFareCoordinates =>
+      _pickupLat != null &&
+      _pickupLng != null &&
+      _destLat != null &&
+      _destLng != null;
+
+  List<String> get _fareUnavailableReasons {
+    final reasons = <String>[];
+    if (_isRecurring) {
+      reasons.add('Fare estimates are shown for one-time rides.');
+    }
+    if (_pickupLat == null || _pickupLng == null) {
+      reasons.add('Use current location so pickup coordinates are available.');
+    }
+    if (_destLat == null || _destLng == null) {
+      reasons.add(
+          'Select a hospital from search so destination coordinates are available.');
+    }
+    return reasons;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: cBg,
       appBar: AppBar(
-        title: Text('Book a Ride', style: AppFonts.sora(fontWeight: FontWeight.w800, color: Colors.white)),
+        title: Text('Book a Ride',
+            style: AppFonts.sora(
+                fontWeight: FontWeight.w800, color: Colors.white)),
         backgroundColor: cTeal,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -417,10 +445,13 @@ class _BookRideScreenState extends State<BookRideScreen> {
                   children: [
                     // ── Addresses ──────────────────────────────────────────
                     _sectionCard(title: 'Route', children: [
-                      _field(ctrl: _pickupCtrl, label: 'Pickup Location',
+                      _field(
+                          ctrl: _pickupCtrl,
+                          label: 'Pickup Location',
                           icon: Icons.trip_origin_rounded,
                           onChanged: _onPickupTextEdited,
-                          validator: (v) => (v ?? '').isEmpty ? 'Required' : null,
+                          validator: (v) =>
+                              (v ?? '').isEmpty ? 'Required' : null,
                           suffix: IconButton(
                             tooltip: 'Use my current location',
                             icon: _resolvingLocation
@@ -436,10 +467,13 @@ class _BookRideScreenState extends State<BookRideScreen> {
                                 _resolvingLocation ? null : _useCurrentLocation,
                           )),
                       const SizedBox(height: 14),
-                      _field(ctrl: _destCtrl, label: 'Destination (Hospital)',
+                      _field(
+                          ctrl: _destCtrl,
+                          label: 'Destination (Hospital)',
                           icon: Icons.local_hospital_rounded,
                           onTap: _pickDestinationFacility,
-                          validator: (v) => (v ?? '').isEmpty ? 'Required' : null),
+                          validator: (v) =>
+                              (v ?? '').isEmpty ? 'Required' : null),
                     ]),
                     const SizedBox(height: 16),
 
@@ -450,23 +484,27 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 16),
                           decoration: BoxDecoration(
                             border: Border.all(color: cBorder),
                             borderRadius: BorderRadius.circular(12),
                             color: Colors.white,
                           ),
                           child: Row(children: [
-                            const Icon(Icons.calendar_today_rounded, color: cTeal, size: 20),
+                            const Icon(Icons.calendar_today_rounded,
+                                color: cTeal, size: 20),
                             const SizedBox(width: 12),
                             Text(
                               _scheduledAt != null
-                                  ? DateFormat('EEE, MMM d, yyyy  •  h:mm a').format(_scheduledAt!)
+                                  ? DateFormat('EEE, MMM d, yyyy  •  h:mm a')
+                                      .format(_scheduledAt!)
                                   : 'Select date and time',
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
-                                color: _scheduledAt != null ? cTealDeep : cMuted,
+                                color:
+                                    _scheduledAt != null ? cTealDeep : cMuted,
                               ),
                             ),
                           ]),
@@ -483,18 +521,23 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         decoration: BoxDecoration(
                           color: cAmber.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: cAmber.withValues(alpha: 0.4)),
+                          border:
+                              Border.all(color: cAmber.withValues(alpha: 0.4)),
                         ),
                         child: const Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.info_outline_rounded, color: cAmber, size: 20),
+                            Icon(Icons.info_outline_rounded,
+                                color: cAmber, size: 20),
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 "You didn't set any Mobility Assistance or Medical Support on your "
                                 "profile. If you need any for this trip, please select it below.",
-                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: cTealDeep),
+                                style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: cTealDeep),
                               ),
                             ),
                           ],
@@ -512,12 +555,16 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         child: const Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.check_circle_outline_rounded, color: cTeal, size: 20),
+                            Icon(Icons.check_circle_outline_rounded,
+                                color: cTeal, size: 20),
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 'Pre-filled from your profile — adjust below if this trip is different.',
-                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: cTealDeep),
+                                style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: cTealDeep),
                               ),
                             ),
                           ],
@@ -534,15 +581,18 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         children: _mobilityOptions.map((opt) {
                           final selected = _mobilityAid == opt.$1;
                           return ChoiceChip(
-                            avatar: Icon(opt.$3, size: 16,
+                            avatar: Icon(opt.$3,
+                                size: 16,
                                 color: selected ? Colors.white : cMuted),
                             label: Text(opt.$2),
                             selected: selected,
-                            onSelected: (_) => setState(() => _mobilityAid = opt.$1),
+                            onSelected: (_) =>
+                                setState(() => _mobilityAid = opt.$1),
                             selectedColor: cTeal,
                             backgroundColor: Colors.white,
                             labelStyle: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                               color: selected ? Colors.white : cTealDeep,
                             ),
                             side: BorderSide(color: selected ? cTeal : cBorder),
@@ -558,13 +608,18 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         groupValue: _serviceLevel,
                         onChanged: (v) => setState(() => _serviceLevel = v!),
                         child: Column(
-                          children: _serviceLevels.map((sl) => RadioListTile<String>(
-                            value: sl.$1,
-                            title: Text(sl.$2,
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep)),
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                          )).toList(),
+                          children: _serviceLevels
+                              .map((sl) => RadioListTile<String>(
+                                    value: sl.$1,
+                                    title: Text(sl.$2,
+                                        style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: cTealDeep)),
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                  ))
+                              .toList(),
                         ),
                       ),
                     ]),
@@ -575,54 +630,91 @@ class _BookRideScreenState extends State<BookRideScreen> {
                       SwitchListTile(
                         value: _oxygenRequired,
                         onChanged: (v) => setState(() => _oxygenRequired = v),
-                        title: const Text('Oxygen Support', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep)),
-                        secondary: const Icon(Icons.monitor_heart_rounded, color: cTeal, size: 20),
+                        title: const Text('Oxygen Support',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: cTealDeep)),
+                        secondary: const Icon(Icons.monitor_heart_rounded,
+                            color: cTeal, size: 20),
                         activeThumbColor: Colors.white,
                         activeTrackColor: cTeal,
-                        contentPadding: EdgeInsets.zero, dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
                       ),
                       SwitchListTile(
                         value: _medicalEscortRequired,
-                        onChanged: (v) => setState(() => _medicalEscortRequired = v),
-                        title: const Text('Medical Escort', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep)),
-                        secondary: const Icon(Icons.medical_services_rounded, color: cTeal, size: 20),
+                        onChanged: (v) =>
+                            setState(() => _medicalEscortRequired = v),
+                        title: const Text('Medical Escort',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: cTealDeep)),
+                        secondary: const Icon(Icons.medical_services_rounded,
+                            color: cTeal, size: 20),
                         activeThumbColor: Colors.white,
                         activeTrackColor: cTeal,
-                        contentPadding: EdgeInsets.zero, dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
                       ),
                       SwitchListTile(
                         value: _ivDripRequired,
                         onChanged: (v) => setState(() => _ivDripRequired = v),
-                        title: const Text('IV Drip Required', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep)),
-                        secondary: const Icon(Icons.water_drop_rounded, color: cTeal, size: 20),
+                        title: const Text('IV Drip Required',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: cTealDeep)),
+                        secondary: const Icon(Icons.water_drop_rounded,
+                            color: cTeal, size: 20),
                         activeThumbColor: Colors.white,
                         activeTrackColor: cTeal,
-                        contentPadding: EdgeInsets.zero, dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
                       ),
                       SwitchListTile(
                         value: _bariatric,
                         onChanged: (v) => setState(() => _bariatric = v),
-                        title: const Text('Bariatric Transport', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep)),
-                        secondary: const Icon(Icons.accessible_rounded, color: cTeal, size: 20),
+                        title: const Text('Bariatric Transport',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: cTealDeep)),
+                        secondary: const Icon(Icons.accessible_rounded,
+                            color: cTeal, size: 20),
                         activeThumbColor: Colors.white,
                         activeTrackColor: cTeal,
-                        contentPadding: EdgeInsets.zero, dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
                       ),
                       const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Attendants', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep)),
+                          const Text('Attendants',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: cTealDeep)),
                           Row(children: [
-                            _counterBtn(Icons.remove_rounded,
-                                () => setState(() => _numAttendants = (_numAttendants - 1).clamp(0, 5))),
+                            _counterBtn(
+                                Icons.remove_rounded,
+                                () => setState(() => _numAttendants =
+                                    (_numAttendants - 1).clamp(0, 5))),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
                               child: Text('$_numAttendants',
-                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cTealDeep)),
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: cTealDeep)),
                             ),
-                            _counterBtn(Icons.add_rounded,
-                                () => setState(() => _numAttendants = (_numAttendants + 1).clamp(0, 5))),
+                            _counterBtn(
+                                Icons.add_rounded,
+                                () => setState(() => _numAttendants =
+                                    (_numAttendants + 1).clamp(0, 5))),
                           ]),
                         ],
                       ),
@@ -630,11 +722,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
                     const SizedBox(height: 16),
 
                     // ── Fare Estimate ─────────────────────────────────────────
-                    if (!_isRecurring &&
-                        _pickupLat != null &&
-                        _pickupLng != null &&
-                        _destLat != null &&
-                        _destLng != null) ...[
+                    if (!_isRecurring && _hasFareCoordinates) ...[
                       FareEstimateSection(
                         pickupLat: _pickupLat!,
                         pickupLng: _pickupLng!,
@@ -645,6 +733,9 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         onEstimate: (b) => _lastFareEstimate = b,
                       ),
                       const SizedBox(height: 16),
+                    ] else ...[
+                      _fareUnavailableCard(),
+                      const SizedBox(height: 16),
                     ],
 
                     // ── Recurring ─────────────────────────────────────────────
@@ -653,7 +744,10 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         value: _isRecurring,
                         onChanged: (v) => setState(() => _isRecurring = v),
                         title: const Text('Set as recurring ride',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep)),
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: cTealDeep)),
                         activeThumbColor: Colors.white,
                         activeTrackColor: cTeal,
                         contentPadding: EdgeInsets.zero,
@@ -661,7 +755,11 @@ class _BookRideScreenState extends State<BookRideScreen> {
                       ),
                       if (_isRecurring) ...[
                         const SizedBox(height: 12),
-                        const Text('Frequency', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cMuted)),
+                        const Text('Frequency',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: cMuted)),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -670,10 +768,13 @@ class _BookRideScreenState extends State<BookRideScreen> {
                             return ChoiceChip(
                               label: Text(f.$2),
                               selected: sel,
-                              onSelected: (_) => setState(() => _frequency = f.$1),
+                              onSelected: (_) =>
+                                  setState(() => _frequency = f.$1),
                               selectedColor: cTeal,
                               backgroundColor: Colors.white,
-                              labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                              labelStyle: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
                                   color: sel ? Colors.white : cTealDeep),
                               side: BorderSide(color: sel ? cTeal : cBorder),
                             );
@@ -681,26 +782,37 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         ),
                         if (_frequency == 'WEEKLY') ...[
                           const SizedBox(height: 12),
-                          const Text('Days', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cMuted)),
+                          const Text('Days',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: cMuted)),
                           const SizedBox(height: 8),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: List.generate(7, (i) {
                               final sel = _daysSelected[i];
                               return GestureDetector(
-                                onTap: () => setState(() => _daysSelected[i] = !sel),
+                                onTap: () =>
+                                    setState(() => _daysSelected[i] = !sel),
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 200),
-                                  width: 38, height: 38,
+                                  width: 38,
+                                  height: 38,
                                   decoration: BoxDecoration(
                                     color: sel ? cTeal : Colors.white,
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: sel ? cTeal : cBorder, width: 1.5),
+                                    border: Border.all(
+                                        color: sel ? cTeal : cBorder,
+                                        width: 1.5),
                                   ),
                                   child: Center(
                                     child: Text(_dayLabels[i],
-                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800,
-                                            color: sel ? Colors.white : cMuted)),
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w800,
+                                            color:
+                                                sel ? Colors.white : cMuted)),
                                   ),
                                 ),
                               );
@@ -717,12 +829,22 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         controller: _notesCtrl,
                         maxLines: 3,
                         decoration: InputDecoration(
-                          hintText: 'Any special instructions, conditions, or notes…',
-                          hintStyle: const TextStyle(color: cMuted, fontSize: 13),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: cBorder)),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: cBorder)),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: cTeal, width: 2)),
-                          filled: true, fillColor: Colors.white,
+                          hintText:
+                              'Any special instructions, conditions, or notes…',
+                          hintStyle:
+                              const TextStyle(color: cMuted, fontSize: 13),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: cBorder)),
+                          enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: cBorder)),
+                          focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  const BorderSide(color: cTeal, width: 2)),
+                          filled: true,
+                          fillColor: Colors.white,
                         ),
                       ),
                     ]),
@@ -735,13 +857,21 @@ class _BookRideScreenState extends State<BookRideScreen> {
                       child: ElevatedButton(
                         onPressed: _submit,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: cTeal, foregroundColor: Colors.white,
+                          backgroundColor: cTeal,
+                          foregroundColor: Colors.white,
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
                         ),
                         child: Text(
-                          _isRecurring ? 'CREATE RECURRING SCHEDULE' : 'BOOK RIDE',
-                          style: AppFonts.sora(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
+                          _isRecurring
+                              ? 'CREATE RECURRING SCHEDULE'
+                              : 'BOOK RIDE',
+                          style: AppFonts.sora(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 0.5),
                         ),
                       ),
                     ),
@@ -760,15 +890,23 @@ class _BookRideScreenState extends State<BookRideScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 10, offset: Offset(0, 3))],
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x08000000), blurRadius: 10, offset: Offset(0, 3))
+        ],
       ),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(20),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: AppFonts.sora(fontSize: 14, fontWeight: FontWeight.w800, color: cTealDeep)),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: AppFonts.sora(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: cTealDeep)),
             const SizedBox(height: 14),
             ...children,
           ]),
@@ -793,7 +931,8 @@ class _BookRideScreenState extends State<BookRideScreen> {
       readOnly: onTap != null,
       onTap: onTap,
       onChanged: onChanged,
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep),
+      style: const TextStyle(
+          fontSize: 14, fontWeight: FontWeight.w600, color: cTealDeep),
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: cTeal, size: 20),
@@ -801,10 +940,17 @@ class _BookRideScreenState extends State<BookRideScreen> {
             (onTap != null
                 ? const Icon(Icons.search, color: cMuted, size: 18)
                 : null),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: cBorder)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: cBorder)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: cTeal, width: 2)),
-        filled: true, fillColor: Colors.white,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: cBorder)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: cBorder)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: cTeal, width: 2)),
+        filled: true,
+        fillColor: Colors.white,
       ),
       validator: validator,
     );
@@ -816,7 +962,101 @@ class _BookRideScreenState extends State<BookRideScreen> {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(8),
-          child: SizedBox(width: 36, height: 36, child: Icon(icon, size: 18, color: cTeal)),
+          child: SizedBox(
+              width: 36, height: 36, child: Icon(icon, size: 18, color: cTeal)),
         ),
       );
+
+  Widget _fareUnavailableCard() {
+    final reasons = _fareUnavailableReasons;
+    return _sectionCard(
+      title: 'Fare Estimate',
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: cTealLight,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: cBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.calculate_rounded, color: cTeal, size: 20),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Fare calculation will appear after the route has map coordinates.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: cTealDeep,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (reasons.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                ...reasons.map(
+                  (reason) => Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 6),
+                          child: Icon(Icons.circle, size: 5, color: cMuted),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            reason,
+                            style: const TextStyle(fontSize: 12, color: cMuted),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              if (!_isRecurring) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed:
+                          _resolvingLocation ? null : _useCurrentLocation,
+                      icon: _resolvingLocation
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: cTeal,
+                              ),
+                            )
+                          : const Icon(Icons.my_location_rounded, size: 16),
+                      label: const Text('Use current location'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _pickDestinationFacility,
+                      icon: const Icon(Icons.local_hospital_rounded, size: 16),
+                      label: const Text('Select hospital'),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
