@@ -52,6 +52,69 @@ class ApiService {
     };
   }
 
+  static Map<String, String> _headersWithToken(String? token) {
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  static Future<String?> _refreshAccessToken() async {
+    final refresh = AuthStorage.refreshToken;
+    if (refresh == null || refresh.isEmpty) return null;
+
+    final res = await http
+        .post(
+          Uri.parse('$_base/auth/refresh/'),
+          headers: _headersWithToken(null),
+          body: jsonEncode({'refresh': refresh}),
+        )
+        .timeout(
+          _timeout,
+          onTimeout: () => throw ApiException(_coldStartMessage, 0),
+        );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      return null;
+    }
+
+    final body = jsonDecode(res.body);
+    if (body is! Map) return null;
+
+    final data = _unwrap(body);
+    if (data is! Map) return null;
+
+    final access = data['access'] as String?;
+    final newRefresh = data['refresh'] as String?;
+    if (access == null || access.isEmpty) return null;
+    AuthStorage.saveTokens(access: access, refresh: newRefresh ?? refresh);
+    return access;
+  }
+
+  static Future<http.Response> _send(
+    Future<http.Response> Function(Map<String, String> headers) request, {
+    bool retryOn401 = true,
+  }) async {
+    final response = await request(_headers).timeout(
+      _timeout,
+      onTimeout: () => throw ApiException(_coldStartMessage, 0),
+    );
+    if (response.statusCode != 401 || !retryOn401) {
+      return response;
+    }
+
+    final refreshed = await _refreshAccessToken();
+    if (refreshed == null) {
+      return response;
+    }
+
+    return request(_headers).timeout(
+      _timeout,
+      onTimeout: () => throw ApiException(_coldStartMessage, 0),
+    );
+  }
+
   // ── Unwrap helpers ──────────────────────────────────────────────────────
 
   /// Strips the `{success, message, data}` Django envelope, if present.
@@ -84,10 +147,9 @@ class ApiService {
   /// GET a single resource. Unwraps `{success, data}` envelope.
   /// Returns the payload dict (or `{}` on empty / non-dict responses).
   static Future<Map<String, dynamic>> get(String path) async {
-    final res = await http.get(
-      Uri.parse('$_base$path'),
-      headers: _headers,
-    ).timeout(_timeout, onTimeout: () => throw ApiException(_coldStartMessage, 0));
+    final res = await _send(
+      (headers) => http.get(Uri.parse('$_base$path'), headers: headers),
+    );
     final body = _handle(res);
     final unwrapped = _unwrap(body);
     if (unwrapped is Map<String, dynamic>) return unwrapped;
@@ -98,10 +160,9 @@ class ApiService {
   /// GET a collection. Handles both DRF paginated `{results: [...]}` and
   /// plain list responses. Returns a flat list of item dicts.
   static Future<List<Map<String, dynamic>>> list(String path) async {
-    final res = await http.get(
-      Uri.parse('$_base$path'),
-      headers: _headers,
-    ).timeout(_timeout, onTimeout: () => throw ApiException(_coldStartMessage, 0));
+    final res = await _send(
+      (headers) => http.get(Uri.parse('$_base$path'), headers: headers),
+    );
     return _extractList(_handle(res));
   }
 
@@ -110,11 +171,13 @@ class ApiService {
     String path, [
     Map<String, dynamic>? body,
   ]) async {
-    final res = await http.post(
-      Uri.parse('$_base$path'),
-      headers: _headers,
-      body: body != null ? jsonEncode(body) : null,
-    ).timeout(_timeout, onTimeout: () => throw ApiException(_coldStartMessage, 0));
+    final res = await _send(
+      (headers) => http.post(
+        Uri.parse('$_base$path'),
+        headers: headers,
+        body: body != null ? jsonEncode(body) : null,
+      ),
+    );
     final parsed = _handle(res);
     final unwrapped = _unwrap(parsed);
     if (unwrapped is Map<String, dynamic>) return unwrapped;
@@ -127,11 +190,13 @@ class ApiService {
     String path, [
     Map<String, dynamic>? body,
   ]) async {
-    final res = await http.patch(
-      Uri.parse('$_base$path'),
-      headers: _headers,
-      body: body != null ? jsonEncode(body) : null,
-    ).timeout(_timeout, onTimeout: () => throw ApiException(_coldStartMessage, 0));
+    final res = await _send(
+      (headers) => http.patch(
+        Uri.parse('$_base$path'),
+        headers: headers,
+        body: body != null ? jsonEncode(body) : null,
+      ),
+    );
     final parsed = _handle(res);
     final unwrapped = _unwrap(parsed);
     if (unwrapped is Map<String, dynamic>) return unwrapped;
@@ -141,10 +206,9 @@ class ApiService {
 
   /// DELETE.
   static Future<Map<String, dynamic>> delete(String path) async {
-    final res = await http.delete(
-      Uri.parse('$_base$path'),
-      headers: _headers,
-    ).timeout(_timeout, onTimeout: () => throw ApiException(_coldStartMessage, 0));
+    final res = await _send(
+      (headers) => http.delete(Uri.parse('$_base$path'), headers: headers),
+    );
     final parsed = _handle(res);
     if (parsed is Map<String, dynamic>) return parsed;
     return {};
@@ -158,7 +222,8 @@ class ApiService {
       try {
         final j = jsonDecode(res.body);
         if (j is Map) {
-          msg = j['detail'] as String? ??
+          msg =
+              j['detail'] as String? ??
               j['error'] as String? ??
               j['message'] as String? ??
               _firstFieldError(j) ??
