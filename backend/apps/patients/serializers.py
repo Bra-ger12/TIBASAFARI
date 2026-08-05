@@ -91,6 +91,7 @@ class PatientProfileSerializer(serializers.ModelSerializer):
 
 
 class PatientTripRequestSerializer(serializers.ModelSerializer):
+    patient = serializers.PrimaryKeyRelatedField(read_only=True)
     destination_facility_name = serializers.SerializerMethodField()
     driver_name = serializers.CharField(source="driver.full_name", read_only=True)
     is_rated = serializers.SerializerMethodField()
@@ -116,6 +117,7 @@ class PatientTripRequestSerializer(serializers.ModelSerializer):
         model = Trip
         fields = (
             "id",
+            "patient",
             "pickup_address",
             "destination_address",
             "destination_facility",
@@ -149,6 +151,7 @@ class PatientTripRequestSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id",
+            "patient",
             "status",
             "created_at",
             "destination_facility_name",

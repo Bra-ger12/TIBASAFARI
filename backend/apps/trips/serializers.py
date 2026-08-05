@@ -130,6 +130,8 @@ class TripSerializer(serializers.ModelSerializer):
 
 
 class TripCreateSerializer(serializers.ModelSerializer):
+    patient = serializers.PrimaryKeyRelatedField(read_only=True)
+
     def validate_destination_facility(self, value):
         if value is not None and not value.is_active:
             raise serializers.ValidationError(
@@ -141,6 +143,7 @@ class TripCreateSerializer(serializers.ModelSerializer):
         model = Trip
         fields = (
             "id",
+            "patient",
             "pickup_address",
             "destination_address",
             "destination_facility",
@@ -163,7 +166,7 @@ class TripCreateSerializer(serializers.ModelSerializer):
             "recurring_schedule",
             "status",
         )
-        read_only_fields = ("id", "status")
+        read_only_fields = ("id", "patient", "status")
 
 
 class FareEstimateRequestSerializer(serializers.Serializer):

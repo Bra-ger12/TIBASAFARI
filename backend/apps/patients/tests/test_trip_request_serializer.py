@@ -112,3 +112,21 @@ def test_can_book_trip_to_active_facility():
         }
     )
     assert serializer.is_valid(), serializer.errors
+
+
+@pytest.mark.django_db
+def test_patient_trip_create_payload_does_not_require_patient_field():
+    """The mobile patient app posts to /patients/trip-requests/ without a
+    patient id; the view supplies request.user in perform_create."""
+    serializer = PatientTripRequestSerializer(
+        data={
+            "pickup_address": "66MF+4MM, Dar es Salaam",
+            "destination_address": "Amana Refferial Hospital",
+            "scheduled_at": timezone.now().isoformat(),
+            "mobility_aid": Trip.MobilityAid.NONE,
+            "service_level": Trip.ServiceLevel.CURB_TO_CURB,
+        }
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    assert "patient" not in serializer.validated_data
