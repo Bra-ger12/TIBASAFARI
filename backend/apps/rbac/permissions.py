@@ -14,15 +14,24 @@ PATIENT_PERMISSION_CODES = {
 def _ensure_patient_role_if_applicable(user, permission_code: str) -> None:
     if permission_code not in PATIENT_PERMISSION_CODES:
         return
-    try:
-        user.patient_profile
-    except ObjectDoesNotExist:
-        return
+    if user.role_assignments.exists():
+        try:
+            user.patient_profile
+        except ObjectDoesNotExist:
+            return
+    else:
+        from apps.patients.models import PatientProfile
+
+        PatientProfile.objects.get_or_create(user=user)
 
     from apps.patients.services import get_or_create_patient_role
     from apps.rbac.models import UserRole
 
     UserRole.objects.get_or_create(user=user, role=get_or_create_patient_role())
+    try:
+        user.patient_profile
+    except ObjectDoesNotExist:
+        return
 
 
 def has_permission(user, permission_code: str) -> bool:

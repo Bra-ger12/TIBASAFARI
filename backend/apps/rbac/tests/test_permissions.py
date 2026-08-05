@@ -69,13 +69,37 @@ def test_has_permission_backfills_patient_role_for_profiled_user():
 
 
 @pytest.mark.django_db
-def test_has_permission_does_not_grant_patient_role_without_profile():
+def test_has_permission_backfills_patient_role_and_profile_for_roleless_user():
     user = User.objects.create_user(
-        email="not-a-patient@example.com",
+        email="legacy-patient@example.com",
         password="StrongPass123",
-        full_name="Not Patient",
+        full_name="Legacy Patient",
         status=User.Status.ACTIVE,
     )
+
+    request = APIRequestFactory().post("/api/v1/patients/trip-requests/")
+    request.user = user
+
+    assert HasPermission().has_permission(request, PatientTripView()) is True
+    assert UserRole.objects.filter(user=user, role__code="PATIENT").exists()
+    assert PatientProfile.objects.filter(user=user).exists()
+
+
+@pytest.mark.django_db
+def test_has_permission_does_not_grant_patient_role_to_unrelated_role_user():
+    permission = Permission.objects.create(
+        code="operations.view_vehicle",
+        name="View vehicles",
+    )
+    role = Role.objects.create(code="operations_manager", name="Operations Manager")
+    role.permissions.add(permission)
+    user = User.objects.create_user(
+        email="ops-no-profile@example.com",
+        password="StrongPass123",
+        full_name="Ops No Profile",
+        status=User.Status.ACTIVE,
+    )
+    UserRole.objects.create(user=user, role=role)
 
     request = APIRequestFactory().post("/api/v1/patients/trip-requests/")
     request.user = user
