@@ -40,7 +40,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       final data = await ApiService.post('/auth/login/', {
         'email': _emailController.text.trim(),
         'password': _passwordController.text,
-      });
+      }, false);
 
       final access = data['access'] as String?;
       final refresh = data['refresh'] as String?;
@@ -48,10 +48,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         throw ApiException('No access token returned by server.', 200);
       }
 
-      AuthStorage.saveTokens(
-        access: access,
-        refresh: refresh ?? '',
-      );
+      AuthStorage.saveTokens(access: access, refresh: refresh ?? '');
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/admin');
@@ -60,8 +57,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       setState(() => _errorMessage = e.message);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _errorMessage = 'Unable to connect to server. '
-          'Check that the backend is running and the API URL is correct.');
+      setState(
+        () => _errorMessage =
+            'Unable to connect to server. '
+            'Check that the backend is running and the API URL is correct.',
+      );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -242,7 +242,8 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
       if (!mounted) return;
       setState(() {
         _isSubmitting = false;
-        _errorMessage = 'Unable to connect to server. '
+        _errorMessage =
+            'Unable to connect to server. '
             'Check that the backend is running and the API URL is correct.';
       });
     }
@@ -702,8 +703,11 @@ class _AuthErrorBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              size: 18, color: Color(0xFFDC2626)),
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: Color(0xFFDC2626),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

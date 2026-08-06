@@ -170,6 +170,7 @@ class ApiService {
   static Future<Map<String, dynamic>> post(
     String path, [
     Map<String, dynamic>? body,
+    bool retryOn401 = true,
   ]) async {
     final res = await _send(
       (headers) => http.post(
@@ -177,6 +178,7 @@ class ApiService {
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       ),
+      retryOn401: retryOn401,
     );
     final parsed = _handle(res);
     final unwrapped = _unwrap(parsed);
@@ -226,6 +228,7 @@ class ApiService {
               j['detail'] as String? ??
               j['error'] as String? ??
               j['message'] as String? ??
+              _wrappedErrorMessage(j) ??
               _firstFieldError(j) ??
               msg;
         } else if (j is List && j.isNotEmpty) {
@@ -258,6 +261,22 @@ class ApiService {
       if (value is List && value.isNotEmpty) return value.first.toString();
       if (value is String && value.isNotEmpty) return value;
     }
+    return null;
+  }
+
+  static String? _wrappedErrorMessage(Map j) {
+    final error = j['error'];
+    if (error is! Map) return null;
+
+    final message = error['message'];
+    if (message is String && message.isNotEmpty) return message;
+    if (message is Map) {
+      final detail = message['detail'];
+      if (detail is String && detail.isNotEmpty) return detail;
+      return _firstFieldError(message);
+    }
+    if (message is List && message.isNotEmpty) return message.first.toString();
+
     return null;
   }
 }

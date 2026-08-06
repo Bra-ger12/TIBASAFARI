@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import pytest
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from apps.accounts.models import User
 from apps.billing.models import Invoice, Payment
@@ -113,3 +114,32 @@ def test_verify_payment_rejects_already_processed_payment():
 
     with pytest.raises(Exception):
         InvoiceService().verify_payment(payment, verified_by=staff)
+
+
+@pytest.mark.django_db
+def test_submit_payment_get_returns_guidance_instead_of_method_not_allowed():
+    patient = _make_user("patient-submit-help@example.com")
+    invoice = _make_invoice(patient, total=Decimal("75.00"))
+    client = APIClient()
+    client.force_authenticate(user=patient)
+
+    response = client.get(f"/api/v1/billing/invoices/{invoice.id}/submit-payment/")
+
+    assert response.status_code == 200
+    assert response.data["data"]["required_method"] == "POST"
+    assert response.data["data"]["received_method"] == "GET"
+    assert response.data["data"]["invoice_id"] == str(invoice.id)
+
+
+@pytest.mark.django_db
+def test_submit_payment_wrong_write_method_returns_guidance():
+    patient = _make_user("patient-submit-patch-help@example.com")
+    invoice = _make_invoice(patient, total=Decimal("75.00"))
+    client = APIClient()
+    client.force_authenticate(user=patient)
+
+    response = client.patch(f"/api/v1/billing/invoices/{invoice.id}/submit-payment/")
+
+    assert response.status_code == 200
+    assert response.data["data"]["required_method"] == "POST"
+    assert response.data["data"]["received_method"] == "PATCH"

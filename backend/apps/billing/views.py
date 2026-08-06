@@ -95,9 +95,23 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return success_response(InvoiceSerializer(invoice).data, "Payment recorded")
 
     @extend_schema(request=SubmitPaymentSerializer, responses={201: PaymentSerializer})
-    @action(detail=True, methods=["post"], url_path="submit-payment")
+    @action(
+        detail=True,
+        methods=["get", "post", "put", "patch", "delete"],
+        url_path="submit-payment",
+    )
     def submit_payment(self, request, pk=None):
         invoice = self.get_object()
+        if request.method != "POST":
+            return success_response(
+                {
+                    "required_method": "POST",
+                    "received_method": request.method,
+                    "invoice_id": str(invoice.id),
+                    "amount_due": str(invoice.amount_due),
+                },
+                "Submit payment requires a POST request with amount, method, and reference.",
+            )
         if invoice.status in {
             Invoice.Status.PAID,
             Invoice.Status.CANCELLED,
